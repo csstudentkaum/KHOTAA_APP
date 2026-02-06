@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "702053481596",
+    "project_id": "khotaa-app",
+    "storage_bucket": "khotaa-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:702053481596:android:244de0dcb6300ebce9ddf9",
+        "android_client_info": {
+          "package_name": "com.khotaa.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1QvKr-K02iUUUvNocjG8FNtQ3qd9__a0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
