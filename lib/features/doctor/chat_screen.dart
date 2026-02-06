@@ -7,10 +7,6 @@ class DoctorChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Doctor Chat Screen'),
-      ),
-    );
+    return const Scaffold(body: Center(child: Text('Doctor Chat Screen')));
   }
 }

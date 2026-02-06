@@ -7,10 +7,6 @@ class DoctorsListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Doctors List Screen'),
-      ),
-    );
+    return const Scaffold(body: Center(child: Text('Doctors List Screen')));
   }
 }
