@@ -75,7 +75,7 @@ All critical checks should pass
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/csstudentkaum/KHOTAA_APP.git
 cd KHOTAA_APP
 ```
 
@@ -298,18 +298,17 @@ Test directories are organized as:
 
 ## Environment Variables
 
-Create a `.env` file (already exists) for environment-specific configuration:
+**Note**: Firebase configuration is already handled through the committed configuration files (`firebase_options.dart`, `google-services.json`, `GoogleService-Info.plist`). No environment variables are needed for Firebase.
+
+If you need environment-specific configuration for other services (API keys, etc.), create a `.env` file:
 
 ```env
-# Firebase Configuration
-FIREBASE_API_KEY=your_api_key_here
-FIREBASE_PROJECT_ID=khotaa-app
-
-# Other configuration
-APP_NAME=KHOTAA APP
+# Example: Third-party API keys (if needed)
+# API_KEY=your_api_key_here
+# APP_NAME=KHOTAA APP
 ```
 
-**Note**: `.env` file is gitignored. Never commit secrets!
+**Important**: The `.env` file is gitignored. Never commit secrets or API keys!
 
 ---
 
