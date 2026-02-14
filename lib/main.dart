@@ -18,9 +18,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'KHOTAA APP',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Color(0xFF64ADB3)),
         useMaterial3: true,
       ),
+      debugShowCheckedModeBanner: false,
       home: const Scaffold(
         body: Center(
           child: Text(
