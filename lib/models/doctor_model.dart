@@ -22,7 +22,7 @@ class DoctorModel extends UserModel {
     super.age,
     super.gender,
     required super.phone,
-    super.password,
+    // [PASSWORD_FEATURE] super.password,
     super.createdAt,
     super.updatedAt,
     this.specialtyLevel,
@@ -44,7 +44,7 @@ class DoctorModel extends UserModel {
       age: data['age'],
       gender: data['gender'],
       phone: data['phone'] ?? '',
-      password: data['password'],
+      // [PASSWORD_FEATURE] password: data['password'],
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -70,7 +70,7 @@ class DoctorModel extends UserModel {
       age: data['age'],
       gender: data['gender'],
       phone: data['phone'] ?? '',
-      password: data['password'],
+      // [PASSWORD_FEATURE] password: data['password'],
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -106,7 +106,7 @@ class DoctorModel extends UserModel {
     int? age,
     String? gender,
     String? phone,
-    String? password,
+    // [PASSWORD_FEATURE] String? password,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? specialtyLevel,
@@ -122,7 +122,7 @@ class DoctorModel extends UserModel {
       age: age ?? this.age,
       gender: gender ?? this.gender,
       phone: phone ?? this.phone,
-      password: password ?? this.password,
+      // [PASSWORD_FEATURE] password: password ?? this.password,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       specialtyLevel: specialtyLevel ?? this.specialtyLevel,

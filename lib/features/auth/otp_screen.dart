@@ -11,8 +11,9 @@ import '../../services/firebase/auth_service.dart';
 ///   - phoneNumber (String)
 ///   - isLogin (bool) — true = login flow, false = registration flow
 ///   - role (String) — 'patient' or 'doctor'
-///   - Registration-only fields: firstName, lastName, password, gender,
+///   - Registration-only fields: firstName, lastName, gender,
 ///     specialtyLevel, degree, hospitalName
+///   [PASSWORD_FEATURE] Also receives: password
 class OtpScreen extends StatefulWidget {
   const OtpScreen({super.key});
 
@@ -132,7 +133,7 @@ class _OtpScreenState extends State<OtpScreen> {
     try {
       if (_role == 'doctor') {
         await _authService.completeDoctorRegistration(
-          password: _registrationData['password'] as String,
+          // [PASSWORD_FEATURE] password: _registrationData['password'] as String,
           firstName: _registrationData['firstName'] as String,
           lastName: _registrationData['lastName'] as String,
           phone: _phoneNumber,
@@ -143,7 +144,7 @@ class _OtpScreenState extends State<OtpScreen> {
         );
       } else {
         await _authService.completePatientRegistration(
-          password: _registrationData['password'] as String,
+          // [PASSWORD_FEATURE] password: _registrationData['password'] as String,
           firstName: _registrationData['firstName'] as String,
           lastName: _registrationData['lastName'] as String,
           phone: _phoneNumber,
@@ -152,7 +153,13 @@ class _OtpScreenState extends State<OtpScreen> {
       }
 
       if (!mounted) return;
-      _navigateToHome(_role);
+
+      // After registration, sign out and show success screen
+      // so the user logs in fresh with their new phone number.
+      await _authService.signOut();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context, '/registration-success', (route) => false);
     } catch (e) {
       debugPrint('Registration completion error: $e');
       if (mounted) {

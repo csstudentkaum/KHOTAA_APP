@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../services/firebase/auth_service.dart';
 
-/// Login screen — Phone number + Password → then OTP verification.
+/// Login screen — Phone number → OTP verification (passwordless).
 ///
 /// Flow:
-///   1. User enters phone number + password
-///   2. Password is verified against Firestore
+///   1. User enters phone number
+///   2. Phone is checked against Firestore (must be registered)
 ///   3. OTP is sent to the phone number
 ///   4. Navigates to OTP screen for verification
 class LoginScreen extends StatefulWidget {
@@ -19,17 +19,17 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
+  // [PASSWORD_FEATURE] final _passwordController = TextEditingController();
   final _authService = AuthService();
 
   bool _isLoading = false;
-  bool _obscurePassword = true;
+  // [PASSWORD_FEATURE] bool _obscurePassword = true;
   String? _errorMessage;
 
   @override
   void dispose() {
     _phoneController.dispose();
-    _passwordController.dispose();
+    // [PASSWORD_FEATURE] _passwordController.dispose();
     super.dispose();
   }
 
@@ -42,18 +42,30 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // Step 1: Verify password against Firestore
+      // Step 1: Check if phone is registered in Firestore
       final phone = _phoneController.text.trim();
-      final password = _passwordController.text;
 
-      final userData = await _authService.verifyPasswordForLogin(
+      if (phone.isEmpty) {
+        setState(() {
+          _errorMessage = 'Please enter a valid phone number.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final userData = await _authService.findUserByPhone(
         phone: phone,
-        password: password,
       );
+
+      // [PASSWORD_FEATURE] Uncomment below to re-enable password verification:
+      // final userData = await _authService.verifyPasswordForLogin(
+      //   phone: phone,
+      //   password: _passwordController.text,
+      // );
 
       if (userData == null) {
         setState(() {
-          _errorMessage = 'Invalid phone number or password.';
+          _errorMessage = 'This phone number is not registered.';
           _isLoading = false;
         });
         return;
@@ -164,35 +176,35 @@ class _LoginScreenState extends State<LoginScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 20),
-
-                    // Password field
-                    _buildLabel('Password'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _handleLogin(),
-                      decoration: InputDecoration(
-                        hintText: 'Enter your password',
-                        prefixIcon: const Icon(Icons.lock_outline,
-                            color: AppColors.primary),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            color: AppColors.textHint,
-                          ),
-                          onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Please enter your password' : null,
-                    ),
                     const SizedBox(height: 28),
+
+                    // [PASSWORD_FEATURE] Password field — uncomment to re-enable.
+                    // _buildLabel('Password'),
+                    // const SizedBox(height: 8),
+                    // TextFormField(
+                    //   controller: _passwordController,
+                    //   obscureText: _obscurePassword,
+                    //   textInputAction: TextInputAction.done,
+                    //   onFieldSubmitted: (_) => _handleLogin(),
+                    //   decoration: InputDecoration(
+                    //     hintText: 'Enter your password',
+                    //     prefixIcon: const Icon(Icons.lock_outline,
+                    //         color: AppColors.primary),
+                    //     suffixIcon: IconButton(
+                    //       icon: Icon(
+                    //         _obscurePassword
+                    //             ? Icons.visibility_off_outlined
+                    //             : Icons.visibility_outlined,
+                    //         color: AppColors.textHint,
+                    //       ),
+                    //       onPressed: () => setState(
+                    //           () => _obscurePassword = !_obscurePassword),
+                    //     ),
+                    //   ),
+                    //   validator: (v) =>
+                    //       v == null || v.isEmpty ? 'Please enter your password' : null,
+                    // ),
+                    // const SizedBox(height: 28),
 
                     // Sign In button
                     SizedBox(

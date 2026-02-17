@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../services/firebase/auth_service.dart';
 
-/// Register screen — Phone + Password + OTP verification.
+/// Register screen — Phone + OTP verification (passwordless).
 ///
 /// Flow:
-///   1. User fills: name, phone, gender, password (+ doctor fields if doctor)
+///   1. User fills: name, phone, gender (+ doctor fields if doctor)
 ///   2. Taps "Sign Up" → OTP is sent to phone
 ///   3. Navigates to OTP screen → after OTP verified → profile saved to Firestore
 class RegisterScreen extends StatefulWidget {
@@ -20,8 +20,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+  // [PASSWORD_FEATURE] final _passwordController = TextEditingController();
+  // [PASSWORD_FEATURE] final _confirmPasswordController = TextEditingController();
 
   // Doctor-specific
   final _specialtyController = TextEditingController();
@@ -33,15 +33,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _selectedRole = 'patient';
   String? _selectedGender;
   bool _isLoading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
+  // [PASSWORD_FEATURE] bool _obscurePassword = true;
+  // [PASSWORD_FEATURE] bool _obscureConfirm = true;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    // Update password hints in real-time as user types
-    _passwordController.addListener(() => setState(() {}));
+    // [PASSWORD_FEATURE] Update password hints in real-time as user types
+    // [PASSWORD_FEATURE] _passwordController.addListener(() => setState(() {}));
   }
 
   @override
@@ -49,8 +49,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _phoneController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
+    // [PASSWORD_FEATURE] _passwordController.dispose();
+    // [PASSWORD_FEATURE] _confirmPasswordController.dispose();
     _specialtyController.dispose();
     _degreeController.dispose();
     _hospitalController.dispose();
@@ -67,6 +67,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final phone = _phoneController.text.trim();
+
+      if (phone.isEmpty) {
+        setState(() {
+          _errorMessage = 'Please enter a valid phone number.';
+          _isLoading = false;
+        });
+        return;
+      }
 
       // Check if phone is already registered
       final alreadyExists = await _authService.isPhoneRegistered(phone);
@@ -98,7 +106,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               'role': _selectedRole,
               'firstName': _firstNameController.text.trim(),
               'lastName': _lastNameController.text.trim(),
-              'password': _passwordController.text,
+              // [PASSWORD_FEATURE] 'password': _passwordController.text,
               'gender': _selectedGender,
               // Doctor fields
               if (_selectedRole == 'doctor') ...{
@@ -297,89 +305,90 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
 
                     // Password with strong policy
-                    _buildField(
-                      'Password',
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        textInputAction: TextInputAction.next,
-                        decoration: InputDecoration(
-                          hintText: 'Strong password required',
-                          prefixIcon: const Icon(Icons.lock_outline,
-                              color: AppColors.primary),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: AppColors.textHint,
-                            ),
-                            onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a password';
-                          }
-                          return AuthService.validatePassword(value);
-                        },
-                      ),
-                    ),
-
-                    // Password strength hints
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, left: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _passwordHint('At least 8 characters',
-                              _passwordController.text.length >= 8),
-                          _passwordHint('One uppercase letter (A-Z)',
-                              RegExp(r'[A-Z]').hasMatch(_passwordController.text)),
-                          _passwordHint('One lowercase letter (a-z)',
-                              RegExp(r'[a-z]').hasMatch(_passwordController.text)),
-                          _passwordHint('One number (0-9)',
-                              RegExp(r'[0-9]').hasMatch(_passwordController.text)),
-                          _passwordHint('One special character (!@#\$%^&*)',
-                              RegExp(r'[!@#$%^&*(),.?":{}|<>]')
-                                  .hasMatch(_passwordController.text)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Confirm password
-                    _buildField(
-                      'Confirm Password',
-                      TextFormField(
-                        controller: _confirmPasswordController,
-                        obscureText: _obscureConfirm,
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _handleRegister(),
-                        decoration: InputDecoration(
-                          hintText: 'Re-enter password',
-                          prefixIcon: const Icon(Icons.lock_outline,
-                              color: AppColors.primary),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscureConfirm
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: AppColors.textHint,
-                            ),
-                            onPressed: () => setState(
-                                () => _obscureConfirm = !_obscureConfirm),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value != _passwordController.text) {
-                            return 'Passwords do not match';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
+                    // [PASSWORD_FEATURE] Password fields — uncomment to re-enable.
+                    // _buildField(
+                    //   'Password',
+                    //   TextFormField(
+                    //     controller: _passwordController,
+                    //     obscureText: _obscurePassword,
+                    //     textInputAction: TextInputAction.next,
+                    //     decoration: InputDecoration(
+                    //       hintText: 'Strong password required',
+                    //       prefixIcon: const Icon(Icons.lock_outline,
+                    //           color: AppColors.primary),
+                    //       suffixIcon: IconButton(
+                    //         icon: Icon(
+                    //           _obscurePassword
+                    //               ? Icons.visibility_off_outlined
+                    //               : Icons.visibility_outlined,
+                    //           color: AppColors.textHint,
+                    //         ),
+                    //         onPressed: () => setState(
+                    //             () => _obscurePassword = !_obscurePassword),
+                    //       ),
+                    //     ),
+                    //     validator: (value) {
+                    //       if (value == null || value.isEmpty) {
+                    //         return 'Please enter a password';
+                    //       }
+                    //       return AuthService.validatePassword(value);
+                    //     },
+                    //   ),
+                    // ),
+                    //
+                    // // Password strength hints
+                    // Padding(
+                    //   padding: const EdgeInsets.only(top: 8, left: 4),
+                    //   child: Column(
+                    //     crossAxisAlignment: CrossAxisAlignment.start,
+                    //     children: [
+                    //       _passwordHint('At least 8 characters',
+                    //           _passwordController.text.length >= 8),
+                    //       _passwordHint('One uppercase letter (A-Z)',
+                    //           RegExp(r'[A-Z]').hasMatch(_passwordController.text)),
+                    //       _passwordHint('One lowercase letter (a-z)',
+                    //           RegExp(r'[a-z]').hasMatch(_passwordController.text)),
+                    //       _passwordHint('One number (0-9)',
+                    //           RegExp(r'[0-9]').hasMatch(_passwordController.text)),
+                    //       _passwordHint('One special character (!@#\$%^&*)',
+                    //           RegExp(r'[!@#$%^&*(),.?":{}|<>]')
+                    //               .hasMatch(_passwordController.text)),
+                    //     ],
+                    //   ),
+                    // ),
+                    // const SizedBox(height: 16),
+                    //
+                    // // Confirm password
+                    // _buildField(
+                    //   'Confirm Password',
+                    //   TextFormField(
+                    //     controller: _confirmPasswordController,
+                    //     obscureText: _obscureConfirm,
+                    //     textInputAction: TextInputAction.done,
+                    //     onFieldSubmitted: (_) => _handleRegister(),
+                    //     decoration: InputDecoration(
+                    //       hintText: 'Re-enter password',
+                    //       prefixIcon: const Icon(Icons.lock_outline,
+                    //           color: AppColors.primary),
+                    //       suffixIcon: IconButton(
+                    //         icon: Icon(
+                    //           _obscureConfirm
+                    //               ? Icons.visibility_off_outlined
+                    //               : Icons.visibility_outlined,
+                    //           color: AppColors.textHint,
+                    //         ),
+                    //         onPressed: () => setState(
+                    //             () => _obscureConfirm = !_obscureConfirm),
+                    //       ),
+                    //     ),
+                    //     validator: (value) {
+                    //       if (value != _passwordController.text) {
+                    //         return 'Passwords do not match';
+                    //       }
+                    //       return null;
+                    //     },
+                    //   ),
+                    // ),
                     const SizedBox(height: 28),
 
                     // Sign Up button
@@ -562,25 +571,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _passwordHint(String text, bool met) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        children: [
-          Icon(
-            met ? Icons.check_circle : Icons.circle_outlined,
-            size: 14,
-            color: met ? AppColors.success : AppColors.textHint,
-          ),
-          const SizedBox(width: 6),
-          Text(text,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: met ? AppColors.success : AppColors.textHint)),
-        ],
-      ),
-    );
-  }
+  // [PASSWORD_FEATURE] Uncomment to re-enable password strength hints.
+  // Widget _passwordHint(String text, bool met) {
+  //   return Padding(
+  //     padding: const EdgeInsets.only(bottom: 2),
+  //     child: Row(
+  //       children: [
+  //         Icon(
+  //           met ? Icons.check_circle : Icons.circle_outlined,
+  //           size: 14,
+  //           color: met ? AppColors.success : AppColors.textHint,
+  //         ),
+  //         const SizedBox(width: 6),
+  //         Text(text,
+  //             style: TextStyle(
+  //                 fontSize: 12,
+  //                 color: met ? AppColors.success : AppColors.textHint)),
+  //       ],
+  //     ),
+  //   );
+  // }
 }
 
 class _HeaderClipper extends CustomClipper<Path> {

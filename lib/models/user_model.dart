@@ -11,7 +11,7 @@ class UserModel {
   final int? age;
   final String? gender;
   final String phone;
-  final String? password; // Note: password is managed by Firebase Auth, stored here only if needed
+  // [PASSWORD_FEATURE] final String? password; // Uncomment to re-enable password support
   final String role; // 'doctor' or 'patient'
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -24,7 +24,7 @@ class UserModel {
     this.age,
     this.gender,
     required this.phone,
-    this.password,
+    // [PASSWORD_FEATURE] this.password,
     required this.role,
     this.createdAt,
     this.updatedAt,
@@ -43,7 +43,7 @@ class UserModel {
       age: data['age'],
       gender: data['gender'],
       phone: data['phone'] ?? '',
-      password: data['password'],
+      // [PASSWORD_FEATURE] password: data['password'],
       role: data['role'] ?? '',
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
@@ -66,7 +66,7 @@ class UserModel {
       age: data['age'],
       gender: data['gender'],
       phone: data['phone'] ?? '',
-      password: data['password'],
+      // [PASSWORD_FEATURE] password: data['password'],
       role: data['role'] ?? '',
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
@@ -106,7 +106,7 @@ class UserModel {
     int? age,
     String? gender,
     String? phone,
-    String? password,
+    // [PASSWORD_FEATURE] String? password,
     String? role,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -119,7 +119,7 @@ class UserModel {
       age: age ?? this.age,
       gender: gender ?? this.gender,
       phone: phone ?? this.phone,
-      password: password ?? this.password,
+      // [PASSWORD_FEATURE] password: password ?? this.password,
       role: role ?? this.role,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
