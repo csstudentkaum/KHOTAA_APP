@@ -65,4 +65,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'khotaa-app.firebasestorage.app',
     iosBundleId: 'com.khotaa.app',
   );
+
 }
