@@ -245,7 +245,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _buildField(
                       'Gender',
                       DropdownButtonFormField<String>(
-                        value: _selectedGender,
+                        initialValue: _selectedGender,
                         decoration: const InputDecoration(
                           hintText: 'Select gender',
                           prefixIcon:
