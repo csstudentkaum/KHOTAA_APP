@@ -48,8 +48,6 @@ class _RegistrationSuccessScreenState extends State<RegistrationSuccessScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       body: Container(
         width: double.infinity,
