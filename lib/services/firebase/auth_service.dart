@@ -239,6 +239,38 @@ class AuthService {
     await _auth.signOut();
   }
 
+  // ==================== EMAIL/PASSWORD AUTH (FOR DOCTORS) ====================
+
+  /// Sign in with email and password (used for doctor accounts).
+  /// Returns the User on success, null on failure.
+  Future<User?> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      return credential.user;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Email sign-in failed: ${e.code} - ${e.message}');
+      rethrow;
+    }
+  }
+
+  /// Send a password reset email.
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _auth.sendPasswordResetEmail(email: email.trim());
+  }
+
+  /// Get a user profile from Firestore by UID.
+  Future<Map<String, dynamic>?> getUserProfile(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+    if (!doc.exists) return null;
+    return doc.data();
+  }
+
   // ==================== USER PROFILE ====================
 
   Future<String?> getCurrentUserRole() async {

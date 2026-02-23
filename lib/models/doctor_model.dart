@@ -18,11 +18,13 @@ class DoctorModel extends UserModel {
     required super.id,
     required super.firstName,
     required super.lastName,
+    super.email,
     super.dateOfBirth,
     super.age,
     super.gender,
     required super.phone,
     // [PASSWORD_FEATURE] super.password,
+    super.isActive = false, // Doctors start inactive until admin activates
     super.createdAt,
     super.updatedAt,
     this.specialtyLevel,
@@ -38,6 +40,7 @@ class DoctorModel extends UserModel {
       id: doc.id,
       firstName: data['firstName'] ?? '',
       lastName: data['lastName'] ?? '',
+      email: data['email'],
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
@@ -45,6 +48,7 @@ class DoctorModel extends UserModel {
       gender: data['gender'],
       phone: data['phone'] ?? '',
       // [PASSWORD_FEATURE] password: data['password'],
+      isActive: data['isActive'] ?? false,
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -64,6 +68,7 @@ class DoctorModel extends UserModel {
       id: id,
       firstName: data['firstName'] ?? '',
       lastName: data['lastName'] ?? '',
+      email: data['email'],
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
@@ -71,6 +76,7 @@ class DoctorModel extends UserModel {
       gender: data['gender'],
       phone: data['phone'] ?? '',
       // [PASSWORD_FEATURE] password: data['password'],
+      isActive: data['isActive'] ?? false,
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -102,11 +108,13 @@ class DoctorModel extends UserModel {
     String? id,
     String? firstName,
     String? lastName,
+    String? email,
     DateTime? dateOfBirth,
     int? age,
     String? gender,
     String? phone,
     // [PASSWORD_FEATURE] String? password,
+    bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? specialtyLevel,
@@ -118,11 +126,13 @@ class DoctorModel extends UserModel {
       id: id ?? this.id,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       age: age ?? this.age,
       gender: gender ?? this.gender,
       phone: phone ?? this.phone,
       // [PASSWORD_FEATURE] password: password ?? this.password,
+      isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       specialtyLevel: specialtyLevel ?? this.specialtyLevel,
