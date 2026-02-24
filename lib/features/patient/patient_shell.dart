@@ -1,36 +1,37 @@
 import 'package:flutter/material.dart';
-import '../../app/app_theme.dart';
-import '../../services/firebase/auth_service.dart';
+import '../../shared/widgets/bottom_nav_bar.dart';
+import 'home_screen.dart';
+import 'ai_doctor_screen.dart';
+import 'connect_insole_screen.dart';
+import 'appointment_screen.dart';
+import 'profile_screen.dart';
 
-/// Patient shell - bottom tabs holder
-/// TODO: Implement patient shell with bottom navigation
-class PatientShell extends StatelessWidget {
+/// Patient shell — holds bottom navigation and the five tab screens.
+class PatientShell extends StatefulWidget {
   const PatientShell({super.key});
+
+  @override
+  State<PatientShell> createState() => _PatientShellState();
+}
+
+class _PatientShellState extends State<PatientShell> {
+  int _tab = 0;
+
+  static const _screens = <Widget>[
+    HomeScreen(),
+    AiDoctorScreen(),
+    ConnectInsoleScreen(),
+    AppointmentScreen(),
+    ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Patient Home'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign Out',
-            onPressed: () async {
-              await AuthService().signOut();
-              if (context.mounted) {
-                Navigator.pushNamedAndRemoveUntil(
-                    context, '/login', (route) => false);
-              }
-            },
-          ),
-        ],
-      ),
-      body: const Center(
-        child: Text(
-          'Welcome, Patient!',
-          style: TextStyle(fontSize: 20, color: AppColors.textPrimary),
-        ),
+      body: IndexedStack(index: _tab, children: _screens),
+      bottomNavigationBar: KhotaaBottomNav(
+        currentIndex: _tab,
+        onTap: (i) => setState(() => _tab = i),
       ),
     );
   }
