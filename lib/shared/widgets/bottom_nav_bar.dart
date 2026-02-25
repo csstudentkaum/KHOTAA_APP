@@ -24,6 +24,12 @@ class KhotaaBottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
+        border: const Border(
+          top: BorderSide(
+            color: Color(0xFFE0E0E0),
+            width: 0.8,
+          ),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),

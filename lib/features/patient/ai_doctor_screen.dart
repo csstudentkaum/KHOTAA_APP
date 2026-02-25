@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../app/app_theme.dart';
 import 'analysis_progress_screen.dart';
@@ -16,9 +17,30 @@ class AiDoctorScreen extends StatefulWidget {
   State<AiDoctorScreen> createState() => _AiDoctorScreenState();
 }
 
-class _AiDoctorScreenState extends State<AiDoctorScreen> {
+class _AiDoctorScreenState extends State<AiDoctorScreen>
+    with SingleTickerProviderStateMixin {
   final _picker = ImagePicker();
   File? _image;
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.06).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   // ── Image picking ─────────────────────────────────────────────────
 
@@ -50,7 +72,7 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
       ),
       builder: (_) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -60,6 +82,23 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Upload Image',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Choose how you want to add your image',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[500],
                 ),
               ),
               const SizedBox(height: 20),
@@ -73,7 +112,7 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
                   _pick(ImageSource.camera);
                 },
               ),
-              const SizedBox(height: 4),
+              Divider(height: 1, color: Colors.grey[200]),
               _sheetTile(
                 icon: Icons.photo_library_rounded,
                 color: _kDarkBlue,
@@ -84,7 +123,27 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
                   _pick(ImageSource.gallery);
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -127,20 +186,33 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
     final mq = MediaQuery.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Column(
           children: [
             // ── Curved teal header ──
             _buildHeader(mq.size),
 
-            // ── Body – overlaps header by 52 px for robot icon ──
+            // ── Body – overlaps header by 75 px for robot icon ──
             Transform.translate(
-              offset: const Offset(0, -52),
+              offset: const Offset(0, -75),
               child: Column(
                 children: [
                   _buildRobotAvatar(),
                   const SizedBox(height: 32),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Text(
+                      'Upload your image to get AI-powered health analysis',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 28),
                     child: GestureDetector(
@@ -186,24 +258,29 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
-                  onTap: () => Navigator.maybePop(context),
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 22),
-                  ),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.maybePop(context),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.arrow_back_ios_new_rounded,
+                            color: Colors.white, size: 22),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Your AI Doctor',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.3,
+                const Center(
+                  child: Text(
+                    'Your AI Doctor',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 ),
               ],
@@ -217,31 +294,49 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
   // ── Robot avatar ──────────────────────────────────────────────────
 
   Widget _buildRobotAvatar() {
-    return Container(
-      width: 104,
-      height: 104,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: _kTeal.withValues(alpha: 0.65), width: 4),
-        boxShadow: [
-          BoxShadow(
-              color: _kDarkBlue.withValues(alpha: 0.18),
-              blurRadius: 24,
-              spreadRadius: 2),
-        ],
-      ),
-      child: Container(
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [_kDarkBlue, Color(0xFF2A5080)],
+    return AnimatedBuilder(
+      animation: _pulseAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _pulseAnimation.value,
+          child: Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFA3FBFF),
+                  Color(0xFF629699),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                    color: const Color(0xFFA3FBFF).withValues(alpha: 0.3 * _pulseAnimation.value),
+                    blurRadius: 24 * _pulseAnimation.value,
+                    spreadRadius: 4 * _pulseAnimation.value),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Container(
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF3D6A99), Color(0xFF2F4A5F)],
+                  ),
+                ),
+                child: const Icon(Icons.smart_toy_rounded,
+                    size: 65, color: Colors.white),
+              ),
+            ),
           ),
-        ),
-        child:
-            const Icon(Icons.smart_toy_rounded, size: 50, color: Colors.white),
-      ),
+        );
+      },
     );
   }
 
@@ -260,22 +355,24 @@ class _AiDoctorScreenState extends State<AiDoctorScreen> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 52),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Column(
           children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.inputFill,
-                border: Border.all(color: AppColors.inputBorder),
-              ),
-              child: Icon(Icons.cloud_upload_outlined,
-                  size: 28, color: AppColors.textHint),
+            SvgPicture.asset(
+                'assets/icons/Upload.svg',
+                width: 60,
+                height: 60,
+                colorFilter: const ColorFilter.mode(
+                  Color(0xFF5A5A5A),
+                  BlendMode.srcIn,
+                ),
             ),
             const SizedBox(height: 16),
             Text(
-              'Click to this area to upload image',
+              'Tap to upload a photo',
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,

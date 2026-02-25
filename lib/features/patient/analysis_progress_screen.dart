@@ -133,32 +133,37 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
             ),
             const SizedBox(height: 16),
 
-            // ── Breathing robot icon ──
-            _buildRobotIcon(),
-            const SizedBox(height: 32),
-
-            // ── White card with progress ──
+            // ── Robot overlapping white card ──
             Expanded(
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 28),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 30,
-                      offset: const Offset(0, 10),
+              child: Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  // White card — pushed down by half the robot
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(
+                        left: 28, right: 28, top: 55, bottom: 40),
+                    padding: const EdgeInsets.only(
+                        left: 28, right: 28, top: 80, bottom: 36),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: _error != null ? _errorView() : _progressView(),
+                    child: _error != null ? _errorView() : _progressView(),
+                  ),
+
+                  // Robot icon — half in teal, half in white
+                  _buildRobotIcon(),
+                ],
               ),
             ),
-            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -173,30 +178,40 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
         CurvedAnimation(parent: _breathe, curve: Curves.easeInOut),
       ),
       child: Container(
-        width: 90,
-        height: 90,
+        width: 110,
+        height: 110,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(
-              color: Colors.white.withValues(alpha: 0.5), width: 3),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFA3FBFF),
+              Color(0xFF629699),
+            ],
+          ),
           boxShadow: [
             BoxShadow(
-                color: _kDarkBlue.withValues(alpha: 0.3),
-                blurRadius: 20,
-                spreadRadius: 2),
+              color: const Color(0xFFA3FBFF).withValues(alpha: 0.3),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
           ],
         ),
-        child: Container(
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_kDarkBlue, Color(0xFF2A5080)],
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Container(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF3D6A99), Color(0xFF2F4A5F)],
+              ),
             ),
+            child: const Icon(Icons.smart_toy_rounded,
+                size: 50, color: Colors.white),
           ),
-          child: const Icon(Icons.smart_toy_rounded,
-              size: 44, color: Colors.white),
         ),
       ),
     );
