@@ -1,4 +1,6 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'payment_success_screen.dart';
 
 // ── Figma palette ───────────────────────────────────────────────────
@@ -26,13 +28,119 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final _cardController = TextEditingController();
   final _expiryController = TextEditingController();
   final _cvvController = TextEditingController();
+  final _nameController = TextEditingController();
 
   @override
   void dispose() {
     _cardController.dispose();
     _expiryController.dispose();
     _cvvController.dispose();
+    _nameController.dispose();
     super.dispose();
+  }
+
+  void _pickExpiryDate() {
+    final now = DateTime.now();
+    int selectedMonth = now.month;
+    int selectedYear = now.year;
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => Container(
+        height: 310,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: Column(
+          children: [
+            // Top bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              height: 50,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF7F7F7),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel',
+                      style: TextStyle(fontSize: 16, color: Color(0xFF999999)),
+                    ),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      final mm = selectedMonth.toString().padLeft(2, '0');
+                      final yy = (selectedYear % 100).toString().padLeft(2, '0');
+                      setState(() => _expiryController.text = '$mm / $yy');
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Done',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _kTeal),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Cupertino wheel pickers
+            Expanded(
+              child: Row(
+                children: [
+                  // Month
+                  Expanded(
+                    flex: 2,
+                    child: CupertinoPicker(
+                      scrollController: FixedExtentScrollController(
+                        initialItem: now.month - 1,
+                      ),
+                      itemExtent: 40,
+                      selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+                        background: _kTeal.withValues(alpha: 0.08),
+                      ),
+                      onSelectedItemChanged: (i) => selectedMonth = i + 1,
+                      children: List.generate(12, (i) => Center(
+                        child: Text(
+                          monthNames[i],
+                          style: const TextStyle(fontSize: 18, color: Color(0xFF1A1A1A)),
+                        ),
+                      )),
+                    ),
+                  ),
+                  // Year
+                  Expanded(
+                    flex: 1,
+                    child: CupertinoPicker(
+                      scrollController: FixedExtentScrollController(initialItem: 0),
+                      itemExtent: 40,
+                      selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+                        background: _kTeal.withValues(alpha: 0.08),
+                      ),
+                      onSelectedItemChanged: (i) => selectedYear = now.year + i,
+                      children: List.generate(15, (i) => Center(
+                        child: Text(
+                          (now.year + i).toString(),
+                          style: const TextStyle(fontSize: 18, color: Color(0xFF1A1A1A)),
+                        ),
+                      )),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -82,14 +190,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ),
                 const SizedBox(height: 20),
                 // ── Amount ──
-                const Text(
-                  'SAR 120.00',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/riyal_icon.svg',
+                      width: 22,
+                      height: 26,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      '120.00',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -129,9 +253,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     const SizedBox(height: 10),
                     _inputField(
                       controller: _cardController,
-                      hint: '1234 8896 1145 0896',
+                      hint: 'XXXX XXXX XXXX XXXX',
                       keyboardType: TextInputType.number,
-                      prefixIcon: Icons.credit_card_rounded,
                     ),
                     const SizedBox(height: 22),
 
@@ -144,11 +267,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             children: [
                               _label('Expiry Date'),
                               const SizedBox(height: 10),
-                              _inputField(
-                                controller: _expiryController,
-                                hint: 'MM / YY',
-                                keyboardType: TextInputType.datetime,
-                                prefixIcon: Icons.calendar_today_rounded,
+                              GestureDetector(
+                                onTap: _pickExpiryDate,
+                                child: AbsorbPointer(
+                                  child: _inputField(
+                                    controller: _expiryController,
+                                    hint: 'MM / YY',
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -162,17 +288,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               const SizedBox(height: 10),
                               _inputField(
                                 controller: _cvvController,
-                                hint: '•••',
+                                hint: '***',
                                 keyboardType: TextInputType.number,
                                 obscure: true,
-                                prefixIcon: Icons.lock_outline_rounded,
                               ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 22),
+
+                    // Name
+                    _label('Name'),
+                    const SizedBox(height: 10),
+                    _inputField(
+                      controller: _nameController,
+                      hint: 'Cardholder Name',
+                    ),
+                    const SizedBox(height: 36),
 
                     // Pay Now button
                     SizedBox(
@@ -342,13 +476,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
     required String hint,
     TextInputType? keyboardType,
     bool obscure = false,
-    IconData? prefixIcon,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF5F5F5),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8E8E8)),
       ),
       child: TextField(
         controller: controller,
@@ -359,9 +491,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
           hintText: hint,
           hintStyle: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 15),
           border: InputBorder.none,
-          prefixIcon: prefixIcon != null
-              ? Icon(prefixIcon, size: 20, color: const Color(0xFFAAAAAA))
-              : null,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         ),

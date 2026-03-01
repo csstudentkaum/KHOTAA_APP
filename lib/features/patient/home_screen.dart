@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/firebase/auth_service.dart';
 import 'chat_screen.dart';
 import 'payment_screen.dart';
 
@@ -20,13 +21,34 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 24),
-              const Text(
-                'Home',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A1A1A),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Home',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () async {
+                      await AuthService().signOut();
+                      if (context.mounted) {
+                        Navigator.pushNamedAndRemoveUntil(
+                          context, '/login', (_) => false,
+                        );
+                      }
+                    },
+                    tooltip: 'Sign Out',
+                    icon: const Icon(
+                      Icons.logout_rounded,
+                      color: Color(0xFF9CA3AF),
+                      size: 24,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 28),
 
