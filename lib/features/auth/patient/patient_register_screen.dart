@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../app/app_theme.dart';
 import '../../../services/firebase/auth_service.dart';
+import '../../../shared/formatters/phone_formatter.dart';
 
 /// Patient Registration screen — Phone + OTP verification (passwordless).
 ///
@@ -44,7 +45,8 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
     });
 
     try {
-      final phone = _phoneController.text.trim();
+      final localNumber = _phoneController.text.trim().replaceAll(RegExp(r'\s'), '');
+      final phone = '+966$localNumber';
 
       if (phone.isEmpty) {
         setState(() {
@@ -187,11 +189,33 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
                       TextFormField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: [SaudiPhoneFormatter()],
                         textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          hintText: '+966 5XX XXX XXXX',
-                          prefixIcon: Icon(Icons.phone_outlined,
-                              color: AppColors.primary),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: AppColors.textPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '5X XXX XXXX',
+                          prefixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const SizedBox(width: 16),
+                              const Text('\u{1F1F8}\u{1F1E6}', style: TextStyle(fontSize: 16, height: 1)),
+                              const SizedBox(width: 8),
+                              Text('+966 ',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w400,
+                                    color: AppColors.textPrimary,
+                                    height: 1,
+                                  )),
+                            ],
+                          ),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -199,8 +223,8 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
                           }
                           final cleaned =
                               value.trim().replaceAll(RegExp(r'\s'), '');
-                          if (!RegExp(r'^\+[1-9]\d{6,14}$').hasMatch(cleaned)) {
-                            return 'Enter valid number with country code (e.g. +966...)';
+                          if (!RegExp(r'^5\d{8}$').hasMatch(cleaned)) {
+                            return 'Enter a valid Saudi number (e.g. 5XXXXXXXX)';
                           }
                           return null;
                         },
