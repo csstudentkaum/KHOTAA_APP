@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'app/app_theme.dart';
 import 'app/routes.dart';
 import 'services/push_notification_service.dart';
+import 'services/bluetooth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,13 +53,22 @@ class KhotaaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'KHOTAA',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      navigatorKey: PushNotificationService.navigatorKey,
-      initialRoute: AppRoutes.splash,
-      routes: AppRoutes.routes,
+    // Wrap with MultiProvider to provide BluetoothService globally
+    return MultiProvider(
+      providers: [
+        // BluetoothService for smart insole connection
+        ChangeNotifierProvider<BluetoothService>(
+          create: (_) => BluetoothService(),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'KHOTAA',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        navigatorKey: PushNotificationService.navigatorKey,
+        initialRoute: AppRoutes.splash,
+        routes: AppRoutes.routes,
+      ),
     );
   }
 }

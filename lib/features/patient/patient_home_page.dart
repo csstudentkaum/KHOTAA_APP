@@ -194,7 +194,7 @@ class _PatientHomePageState extends State<PatientHomePage>
             ],
           ),
           content: const Text(
-            'Are you sure you want to call Ambulance 977?',
+            'Are you sure you want to call Ambulance 997?',
             style: TextStyle(
               fontSize: 15,
               color: Color(0xFF6B7280),
@@ -261,7 +261,7 @@ class _PatientHomePageState extends State<PatientHomePage>
   }
 
   Future<void> _makeEmergencyCall() async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: '977');
+    final Uri phoneUri = Uri(scheme: 'tel', path: '997');
     try {
       if (await canLaunchUrl(phoneUri)) {
         await launchUrl(phoneUri);

@@ -49,6 +49,15 @@ dependencies:
   pdf: ^3.11.3
   path_provider: ^2.1.5
   open_file: ^3.5.11
+  
+  # Bluetooth Low Energy for smart insole connection
+  flutter_blue_plus: ^1.35.2
+  
+  # State management
+  provider: ^6.1.2
+  
+  # Permission handling for Bluetooth
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
