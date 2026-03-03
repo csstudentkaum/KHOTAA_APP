@@ -58,6 +58,21 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
     }
   }
 
+  Color _getFilterColor(String filter) {
+    switch (filter) {
+      case 'Unread':
+        return const Color(0xFF5C6BC0);  // Indigo for unread
+      case 'High':
+        return const Color(0xFFE53935);  // Red for high priority
+      case 'Medium':
+        return const Color(0xFFFFA726);  // Orange for medium
+      case 'Low':
+        return const Color(0xFF66BB6A);  // Green for low
+      default:
+        return const Color(0xFF2A9D8F);  // Teal for All
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,11 +162,11 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                         });
                       },
                       backgroundColor: Colors.white,
-                      selectedColor: const Color(0xFF2A9D8F),
+                      selectedColor: _getFilterColor(filter),
                       checkmarkColor: Colors.white,
                       side: BorderSide(
                         color: isSelected
-                            ? const Color(0xFF2A9D8F)
+                            ? _getFilterColor(filter)
                             : const Color(0xFFE5E7EB),
                       ),
                       shape: RoundedRectangleBorder(

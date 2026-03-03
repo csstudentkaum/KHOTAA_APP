@@ -58,6 +58,9 @@ dependencies:
   
   # Permission handling for Bluetooth
   permission_handler: ^11.3.1
+  
+  # Icons library for foot icon
+  font_awesome_flutter: ^10.7.0
 
 dev_dependencies:
   flutter_test:

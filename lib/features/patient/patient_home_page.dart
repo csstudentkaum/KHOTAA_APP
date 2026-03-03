@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'dashboard_screen.dart';
 import 'connect_insole_screen.dart';
 import 'preventive_recommendations_screen.dart';
@@ -369,11 +371,13 @@ class _PatientHomePageState extends State<PatientHomePage>
             Expanded(
               child: _FeatureCard(
                 icon: Icons.calendar_today_outlined,
-                iconColor: const Color(0xFF2A9D8F),
-                iconBgColor: const Color(0xFFE6F5F3),
+                iconColor: const Color(0xFF5C6BC0),  // Indigo blue for appointments
+                iconBgColor: const Color(0xFFE8EAF6),
                 title: 'Book an\nAppointment',
                 subtitle: 'Find a Doctor or\nspecialist',
-                cardColor: Colors.white,
+                cardColor: const Color(0xFFE8EAF6),  // Light indigo background
+                borderColor: const Color(0xFF5C6BC0),
+                hasShadow: false,
                 onTap: () => _showSnackBar('Book Appointment'),
               ),
             ),
@@ -381,11 +385,13 @@ class _PatientHomePageState extends State<PatientHomePage>
             Expanded(
               child: _FeatureCard(
                 icon: Icons.description_outlined,
-                iconColor: const Color(0xFF27AE60),
-                iconBgColor: const Color(0xFFE8F5E9),
+                iconColor: const Color(0xFF7E57C2),  // Purple for treatment
+                iconBgColor: const Color(0xFFEDE7F6),
                 title: 'My Treatment\nPlan',
                 subtitle: 'See your personalized\ntreatment plan',
-                cardColor: Colors.white,
+                cardColor: const Color(0xFFEDE7F6),  // Light purple background
+                borderColor: const Color(0xFF7E57C2),
+                hasShadow: false,
                 onTap: () => _showSnackBar('Treatment Plan'),
               ),
             ),
@@ -397,13 +403,15 @@ class _PatientHomePageState extends State<PatientHomePage>
           children: [
             Expanded(
               child: _FeatureCard(
-                icon: Icons.favorite_outline,
+                icon: FontAwesomeIcons.shoePrints,  // Foot icon
                 iconColor: const Color(0xFFE57373),
-                iconBgColor: Colors.transparent,
+                iconBgColor: const Color(0xFFFCE4EC),
                 title: 'Foot Health\nStatus',
                 subtitle: 'View Foot Health',
                 cardColor: const Color(0xFFFCE4EC),
+                borderColor: const Color(0xFFE57373),
                 hasShadow: false,
+                iconRotation: -math.pi / 2,  // Rotate to vertical
                 onTap: () {
                   Navigator.push(
                     context,
@@ -418,11 +426,12 @@ class _PatientHomePageState extends State<PatientHomePage>
             Expanded(
               child: _FeatureCard(
                 icon: Icons.lightbulb_outline,
-                iconColor: const Color(0xFF2A9D8F),
-                iconBgColor: Colors.transparent,
+                iconColor: const Color(0xFF26A69A),
+                iconBgColor: const Color(0xFFE0F2F1),
                 title: 'View Preventive\nRecommendations',
                 subtitle: 'See recommendations',
                 cardColor: const Color(0xFFE0F2F1),
+                borderColor: const Color(0xFF26A69A),
                 hasShadow: false,
                 onTap: () {
                   Navigator.push(
@@ -497,14 +506,18 @@ class _PatientHomePageState extends State<PatientHomePage>
           _NavBarItem(
             icon: Icons.bluetooth,
             isSelected: _selectedNavIndex == 2,
-            onTap: () {
+            onTap: () async {
               setState(() => _selectedNavIndex = 2);
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => const ConnectInsoleScreen(),
                 ),
               );
+              // Reset to home when returning from Bluetooth screen
+              if (mounted) {
+                setState(() => _selectedNavIndex = 0);
+              }
             },
           ),
           _NavBarItem(
@@ -540,15 +553,17 @@ class _PatientHomePageState extends State<PatientHomePage>
   }
 }
 
-/// Feature Card Widget
-class _FeatureCard extends StatelessWidget {
+/// Feature Card Widget with hover/tap animation
+class _FeatureCard extends StatefulWidget {
   final IconData icon;
   final Color iconColor;
   final Color iconBgColor;
   final String title;
   final String subtitle;
   final Color cardColor;
+  final Color borderColor;
   final bool hasShadow;
+  final double iconRotation;
   final VoidCallback onTap;
 
   const _FeatureCard({
@@ -558,63 +573,149 @@ class _FeatureCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.cardColor,
+    required this.borderColor,
     this.hasShadow = true,
+    this.iconRotation = 0,
     required this.onTap,
   });
 
   @override
+  State<_FeatureCard> createState() => _FeatureCardState();
+}
+
+class _FeatureCardState extends State<_FeatureCard> 
+    with SingleTickerProviderStateMixin {
+  bool _isHovered = false;  // For hover effect (border)
+  bool _isPressed = false;  // For press effect (scale)
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    setState(() => _isPressed = true);
+    _controller.forward();
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    setState(() => _isPressed = false);
+    _controller.reverse();
+  }
+
+  void _onTapCancel() {
+    setState(() => _isPressed = false);
+    _controller.reverse();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 150,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: hasShadow
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+    return MouseRegion(
+      // Hover effect - shows border when mouse enters
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onTapDown: _onTapDown,
+        onTapUp: _onTapUp,
+        onTapCancel: _onTapCancel,
+        // On mobile: long press also shows hover effect
+        onLongPressStart: (_) => setState(() => _isHovered = true),
+        onLongPressEnd: (_) => setState(() => _isHovered = false),
+        child: AnimatedBuilder(
+          animation: _scaleAnimation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _scaleAnimation.value,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: 150,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: widget.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    // Border shows on HOVER or PRESS
+                    color: (_isHovered || _isPressed)
+                        ? widget.borderColor 
+                        : widget.borderColor.withOpacity(0.0),
+                    width: 2.5,
                   ),
-                ]
-              : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                borderRadius: BorderRadius.circular(10),
+                  boxShadow: (_isHovered || _isPressed)
+                      ? [
+                          // Colored shadow on hover
+                          BoxShadow(
+                            color: widget.borderColor.withOpacity(0.25),
+                            blurRadius: 12,
+                            spreadRadius: 1,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : widget.hasShadow
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : null,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: widget.iconBgColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Transform.rotate(
+                        angle: widget.iconRotation,
+                        child: Icon(widget.icon, color: widget.iconColor, size: 24),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      widget.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A2E),
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.subtitle,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: const Color(0xFF6B7280).withOpacity(0.8),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Icon(icon, color: iconColor, size: 24),
-            ),
-            const Spacer(),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1A1A2E),
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 11,
-                color: const Color(0xFF6B7280).withOpacity(0.8),
-                height: 1.3,
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
