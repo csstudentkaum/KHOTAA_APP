@@ -259,9 +259,88 @@ class AuthService {
     }
   }
 
-  /// Send a password reset email.
+  /// Send a password reset email (Firebase default — for "Forgot Password").
   Future<void> sendPasswordResetEmail(String email) async {
     await _auth.sendPasswordResetEmail(email: email.trim());
+  }
+
+  // ==================== DOCTOR ACCOUNT CREATION (ADMIN) ====================
+
+  /// Create a doctor account in Firebase Auth + Firestore.
+  /// This is called by admin. The doctor will receive an activation email
+  /// via the external email service (Resend) to set their password.
+  ///
+  /// Returns the UID of the created doctor.
+  ///
+  /// Flow:
+  ///   1. Create Firebase Auth user with email + random temp password
+  ///   2. Save doctor profile to Firestore (isActive: false)
+  ///   3. Sign the admin back in (creating a user signs them out)
+  ///   4. Caller sends activation email via EmailService
+  Future<String> createDoctorAccount({
+    required String email,
+    required String firstName,
+    required String lastName,
+    required String phone,
+    String? specialtyLevel,
+    String? degree,
+    String? hospitalName,
+    String? gender,
+  }) async {
+    // Save current admin user to re-authenticate after
+    final currentAdmin = _auth.currentUser;
+    final adminEmail = currentAdmin?.email;
+
+    try {
+      // Create Firebase Auth user with a random temp password
+      // Doctor will never know this — they set their own via activation email
+      final tempPassword = _generateTempPassword();
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: tempPassword,
+      );
+
+      final uid = credential.user!.uid;
+
+      // Save doctor profile to Firestore
+      final doctor = DoctorModel(
+        id: uid,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        gender: gender,
+        specialtyLevel: specialtyLevel,
+        degree: degree,
+        hospitalName: hospitalName,
+        isActive: false, // Will be activated when doctor sets password
+        createdAt: DateTime.now(),
+      );
+
+      await _db.collection('users').doc(uid).set(doctor.toMap());
+
+      // Sign out the newly created user (Firebase auto-signs them in)
+      await _auth.signOut();
+
+      // NOTE: The admin needs to sign back in after this.
+      // The caller should handle re-authentication.
+
+      return uid;
+    } catch (e) {
+      debugPrint('Create doctor account error: $e');
+      rethrow;
+    }
+  }
+
+  /// Generate a random temporary password (doctor never sees this).
+  String _generateTempPassword() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*';
+    final random = DateTime.now().millisecondsSinceEpoch;
+    final buffer = StringBuffer();
+    for (var i = 0; i < 24; i++) {
+      buffer.write(chars[(random + i * 37) % chars.length]);
+    }
+    return buffer.toString();
   }
 
   /// Get a user profile from Firestore by UID.

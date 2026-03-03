@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../app/app_theme.dart';
-import '../../services/firebase/auth_service.dart';
+import '../../../app/app_theme.dart';
+import '../../../services/firebase/auth_service.dart';
 
 /// OTP verification screen.
 ///
