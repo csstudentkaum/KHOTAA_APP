@@ -3,12 +3,17 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'app/app_theme.dart';
 import 'app/routes.dart';
+import 'services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    
+    // Initialize push notification service
+    await PushNotificationService().initialize();
+    
     runApp(const KhotaaApp());
   } catch (e, stackTrace) {
     debugPrint('Firebase initialization error: $e');
@@ -50,6 +55,7 @@ class KhotaaApp extends StatelessWidget {
       title: 'KHOTAA',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      navigatorKey: PushNotificationService.navigatorKey,
       initialRoute: AppRoutes.splash,
       routes: AppRoutes.routes,
     );

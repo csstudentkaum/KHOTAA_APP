@@ -38,18 +38,25 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
-    final authService = AuthService();
+    try {
+      final authService = AuthService();
 
-    if (authService.isLoggedIn) {
-      // Check user role and navigate to appropriate home
-      final role = await authService.getCurrentUserRole();
-      if (!mounted) return;
-      if (role == 'doctor') {
-        Navigator.pushReplacementNamed(context, '/doctor-home');
+      if (authService.isLoggedIn) {
+        // Check user role and navigate to appropriate home
+        final role = await authService.getCurrentUserRole();
+        if (!mounted) return;
+        if (role == 'doctor') {
+          Navigator.pushReplacementNamed(context, '/doctor-home');
+        } else {
+          Navigator.pushReplacementNamed(context, '/patient-home');
+        }
       } else {
-        Navigator.pushReplacementNamed(context, '/patient-home');
+        Navigator.pushReplacementNamed(context, '/login');
       }
-    } else {
+    } catch (e) {
+      // If Firebase fails, go to login screen anyway
+      debugPrint('Navigation error: $e');
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/login');
     }
   }

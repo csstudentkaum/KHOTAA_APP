@@ -6,6 +6,7 @@ import '../features/auth/otp_screen.dart';
 import '../features/auth/registration_success_screen.dart';
 import '../features/patient/patient_shell.dart';
 import '../features/doctor/doctor_shell.dart';
+import '../features/patient/weekly_report_screen.dart';
 
 /// Application routes configuration
 class AppRoutes {
@@ -19,6 +20,7 @@ class AppRoutes {
   static const String registrationSuccess = '/registration-success';
   static const String patientHome = '/patient-home';
   static const String doctorHome = '/doctor-home';
+  static const String weeklyReport = '/weekly-report';
 
   /// Route map used by MaterialApp's `routes` parameter
   static Map<String, WidgetBuilder> get routes => {
@@ -29,5 +31,6 @@ class AppRoutes {
         registrationSuccess: (_) => const RegistrationSuccessScreen(),
         patientHome: (_) => const PatientShell(),
         doctorHome: (_) => const DoctorShell(),
+        weeklyReport: (_) => const WeeklyReportScreen(),
       };
 }
