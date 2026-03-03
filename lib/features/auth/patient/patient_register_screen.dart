@@ -335,15 +335,10 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
+                    Image.asset(
+                      'assets/images/khotaa_logo_white.png',
                       width: 60,
                       height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(30),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.favorite,
-                          size: 32, color: Colors.white),
                     ),
                     const SizedBox(height: 8),
                     const Text('KHOTAA',

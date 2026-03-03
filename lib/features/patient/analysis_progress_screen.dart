@@ -6,7 +6,6 @@ import '../../services/firebase/image_analysis_service.dart';
 import 'analysis_result_screen.dart';
 
 // ── Figma palette ───────────────────────────────────────────────────
-const _kDarkBlue = Color(0xFF3D6A99);
 const _kTeal = Color(0xFF64ADB3);
 const _kPink = Color(0xFFF1AAAF);
 

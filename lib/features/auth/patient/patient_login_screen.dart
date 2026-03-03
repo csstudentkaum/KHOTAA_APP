@@ -305,14 +305,10 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
+              Image.asset(
+                'assets/images/khotaa_logo_white.png',
                 width: 80,
                 height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(30),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.favorite, size: 44, color: Colors.white),
               ),
               const SizedBox(height: 12),
               const Text(

@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-// ── Figma palette ───────────────────────────────────────────────────
-const _kTeal = Color(0xFF64ADB3);
-
 /// Voice call screen — matches the Figma "Dr. Abdullah" call UI.
 class CallScreen extends StatefulWidget {
   final String doctorName;

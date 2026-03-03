@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../app/app_theme.dart';
 import 'call_screen.dart';
 import 'video_call_screen.dart';
 
@@ -53,6 +52,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Opens a bottom sheet to pick image from gallery or camera, or a file
+  // ignore: unused_element
   void _showAttachmentPicker() {
     showModalBottomSheet(
       context: context,

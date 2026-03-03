@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-// ── Figma palette ───────────────────────────────────────────────────
-const _kTeal = Color(0xFF64ADB3);
-
 /// Video call screen — similar to call screen but with video placeholder.
 class VideoCallScreen extends StatefulWidget {
   final String doctorName;

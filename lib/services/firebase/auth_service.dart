@@ -287,10 +287,6 @@ class AuthService {
     String? hospitalName,
     String? gender,
   }) async {
-    // Save current admin user to re-authenticate after
-    final currentAdmin = _auth.currentUser;
-    final adminEmail = currentAdmin?.email;
-
     try {
       // Create Firebase Auth user with a random temp password
       // Doctor will never know this — they set their own via activation email

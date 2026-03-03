@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 /// Service for sending doctor activation emails via the KHOTAA email server.
@@ -14,11 +15,11 @@ import 'package:http/http.dart' as http;
 ///   4. Doctor's account is activated (isActive: true) automatically
 ///   5. Doctor logs in via the app
 class EmailService {
-  // TODO: Replace with your actual Vercel deployment URL after deploying
-  static const String _baseUrl = 'https://YOUR-PROJECT.vercel.app';
+  // Read from .env file at runtime (no secrets in code!)
+  static String get _baseUrl =>
+      dotenv.env['API_BASE_URL'] ?? 'https://khotaa-email-server.vercel.app';
 
-  // TODO: Replace with your API secret (same value as API_SECRET env var in Vercel)
-  static const String _apiSecret = 'YOUR_API_SECRET_HERE';
+  static String get _apiSecret => dotenv.env['API_SECRET'] ?? '';
 
   /// Send a doctor activation email.
   ///
