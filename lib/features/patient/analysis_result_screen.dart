@@ -8,6 +8,7 @@ import '../../app/app_theme.dart';
 import '../../models/image_analysis.dart';
 import '../../models/medical_images.dart';
 import 'appointment_screen.dart';
+import 'medical_faq_chatbot_screen.dart';
 
 // ── Palette ─────────────────────────────────────────────────────────
 const _kTeal = Color(0xFF64ADB3);
@@ -88,6 +89,8 @@ class AnalysisResultScreen extends StatelessWidget {
                 _buildDownloadButton(context),
                 const SizedBox(height: 12),
                 _buildHomeButton(context),
+                const SizedBox(height: 16),
+                _buildFaqCard(context),
               ]),
             ),
           ),
@@ -705,6 +708,63 @@ class AnalysisResultScreen extends StatelessWidget {
               const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         child: const Text('Back to Home'),
+      ),
+    );
+  }
+
+  // ── FAQ Chatbot Card ───────────────────────────────────────────────
+
+  Widget _buildFaqCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MedicalFaqChatbotScreen()),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: _kTeal.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _kTeal.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _kTeal.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.smart_toy_rounded,
+                  color: _kTeal, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Have questions?',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Ask our FAQ chatbot about foot care',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                color: _kTeal, size: 16),
+          ],
+        ),
       ),
     );
   }
