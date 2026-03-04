@@ -60,7 +60,7 @@ class ImageAnalysisService {
 
   // ── 2. Analyse the image ──────────────────────────────────────────
 
-  /// Currently returns a simulated Wagner-grade result.
+  /// Currently returns a simulated ulcer-classification result.
   /// Replace the body with an HTTP call to your deployed model.
   Future<ImageAnalysis> analyse(MedicalImages image) async {
     final uid = _uid ?? 'demo-user';
@@ -71,24 +71,26 @@ class ImageAnalysisService {
       await Future.delayed(const Duration(milliseconds: 1500));
       return ImageAnalysis(
         analysisID: 'demo_a_${DateTime.now().millisecondsSinceEpoch}',
-        wagnerGrade: sim.grade,
+        classification: sim.classification,
         notes: sim.notes,
         confidence: sim.confidence,
-        modelName: 'DFU-CNN-v1',
+        modelName: 'DFU-Classify-v1',
         imageId: image.imageID,
         patientId: uid,
       );
     }
 
     // ── TODO: real call ──
+    // final response = await http.post(Uri.parse('YOUR_MODEL_ENDPOINT'), ...);
+    // Parse response for: classification, confidence
 
     final id = _db.collection('image_analysis').doc().id;
     final analysis = ImageAnalysis(
       analysisID: id,
-      wagnerGrade: sim.grade,
+      classification: sim.classification,
       notes: sim.notes,
       confidence: sim.confidence,
-      modelName: 'DFU-CNN-v1',
+      modelName: 'DFU-Classify-v1',
       imageId: image.imageID,
       patientId: uid,
     );
@@ -129,40 +131,57 @@ class ImageAnalysisService {
 
   _SimResult _simulate() {
     final r = math.Random();
-    final w = [40, 25, 15, 10, 7, 3]; // weighted distribution
-    var pick = r.nextInt(w.reduce((a, b) => a + b));
-    int grade = 0;
-    for (var i = 0; i < w.length; i++) {
-      pick -= w[i];
+    // Weighted distribution: None 45%, Infection 25%, Ischaemia 20%, Both 10%
+    final weights = [45, 25, 20, 10];
+    final classes = [
+      UlcerClass.none,
+      UlcerClass.infection,
+      UlcerClass.ischaemia,
+      UlcerClass.both,
+    ];
+
+    var pick = r.nextInt(weights.reduce((a, b) => a + b));
+    UlcerClass cls = UlcerClass.none;
+    for (var i = 0; i < weights.length; i++) {
+      pick -= weights[i];
       if (pick < 0) {
-        grade = i;
+        cls = classes[i];
         break;
       }
     }
+
     return _SimResult(
-      grade: grade,
-      confidence: 0.85 + r.nextDouble() * 0.14,
-      notes: _noteFor(grade),
+      classification: cls,
+      confidence: 0.82 + r.nextDouble() * 0.17,
+      notes: _noteFor(cls),
     );
   }
 
-  String _noteFor(int g) => switch (g) {
-        0 => 'No ulceration detected. Skin appears intact.',
-        1 => 'Superficial ulcer. Limited to skin surface.',
-        2 => 'Deep ulcer reaching tendon or bone.',
-        3 => 'Deep ulcer with abscess or osteomyelitis.',
-        4 => 'Partial foot gangrene. Surgical consult needed.',
-        5 => 'Extensive gangrene. Emergency care required.',
-        _ => 'Consult a healthcare provider.',
+  String _noteFor(UlcerClass cls) => switch (cls) {
+        UlcerClass.none =>
+          'No clinical signs of infection or ischaemia detected. '
+              'Wound appears stable. Continue routine wound care and monitoring.',
+        UlcerClass.infection =>
+          'Infection indicators detected: peri-wound erythema, possible purulence '
+              'or swelling. Evaluate for systemic signs. Consider empirical '
+              'antibiotic therapy and wound debridement as appropriate.',
+        UlcerClass.ischaemia =>
+          'Ischaemic indicators detected: pallor, delayed capillary refill, '
+              'or tissue changes suggesting reduced perfusion. Vascular '
+              'assessment (ABI / toe pressure) recommended.',
+        UlcerClass.both =>
+          'Combined infection and ischaemia indicators detected. '
+              'High-risk presentation — urgent multidisciplinary evaluation '
+              'recommended. Assess for limb-threatening involvement.',
       };
 }
 
 class _SimResult {
-  final int grade;
+  final UlcerClass classification;
   final double confidence;
   final String notes;
   const _SimResult({
-    required this.grade,
+    required this.classification,
     required this.confidence,
     required this.notes,
   });
