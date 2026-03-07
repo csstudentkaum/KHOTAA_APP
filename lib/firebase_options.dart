@@ -63,7 +63,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '702053481596',
     projectId: 'khotaa-app',
     storageBucket: 'khotaa-app.firebasestorage.app',
+    iosClientId:
+        '702053481596-ios4240804f63920034e9ddf9.apps.googleusercontent.com',
     iosBundleId: 'com.khotaa.app',
   );
-
 }
