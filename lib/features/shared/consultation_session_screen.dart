@@ -1,12 +1,15 @@
 ﻿import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import '../../app/app_theme.dart';
 import '../../models/chat_message.dart';
 import '../../models/consultation.dart';
@@ -699,11 +702,10 @@ class _InputBar extends StatelessWidget {
                         : TextField(
                             controller: controller,
                             maxLines: null,
-                            textCapitalization: TextCapitalization.sentences,
+                            textCapitalization: TextCapitalization.none,
                             style: const TextStyle(
                               fontSize: 14,
                               color: AppColors.textPrimary,
-                              fontFamily: 'Poppins',
                             ),
                             decoration: const InputDecoration(
                               hintText: 'Message',
@@ -1028,7 +1030,6 @@ class _MessageBubble extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               color: isMe ? Colors.white : AppColors.textPrimary,
-              fontFamily: 'Poppins',
               height: 1.35,
             ),
           ),
@@ -1065,54 +1066,87 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 );
               }
-              return Image.network(
-                snapshot.data!,
-                width: 220,
-                fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return const SizedBox(
-                    width: 220,
-                    height: 180,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary, strokeWidth: 2),
-                    ),
-                  );
-                },
+              return GestureDetector(
+                onTap: () => _showFullScreenImage(context, snapshot.data!),
+                child: Image.network(
+                  snapshot.data!,
+                  width: 220,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) {
+                    if (progress == null) return child;
+                    return const SizedBox(
+                      width: 220,
+                      height: 180,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary, strokeWidth: 2),
+                      ),
+                    );
+                  },
+                ),
               );
             },
           ),
         );
 
       case MessageType.file:
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.insert_drive_file_rounded,
-                size: 28,
-                color: isMe ? Colors.white70 : AppColors.primary,
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  message.fileName ?? 'File',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isMe ? Colors.white : AppColors.textPrimary,
-                    fontFamily: 'Poppins',
-                    decoration: TextDecoration.underline,
-                    decorationColor:
-                        isMe ? Colors.white70 : AppColors.primary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+        return GestureDetector(
+          onTap: message.fileUrl != null
+              ? () async {
+                  final url = message.fileUrl!;
+                  final name = message.fileName ??
+                      url.split('?').first.split('/').last;
+                  // Check extension from fileName first, then URL
+                  final ext = name.split('.').last.toLowerCase();
+                  const imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'};
+                  if (imageExts.contains(ext)) {
+                    _showFullScreenImage(context, url);
+                    return;
+                  }
+                  if (ext == 'pdf') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            _PdfViewerScreen(url: url, fileName: name),
+                      ),
+                    );
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Only PDF files can be viewed in-app'),
+                        backgroundColor: Colors.grey),
+                  );
+                }
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.insert_drive_file_rounded,
+                  size: 28,
+                  color: isMe ? Colors.white70 : AppColors.primary,
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    message.fileName ?? 'File',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isMe ? Colors.white : AppColors.textPrimary,
+                      fontFamily: 'Poppins',
+                      decoration: TextDecoration.underline,
+                      decorationColor:
+                          isMe ? Colors.white70 : AppColors.primary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
 
@@ -1229,6 +1263,143 @@ class _MessageBubble extends StatelessWidget {
     final m = seconds ~/ 60;
     final s = (seconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+
+  void _showFullScreenImage(BuildContext context, String url) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, __, ___) => _FullScreenImage(url: url),
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
+class _FullScreenImage extends StatelessWidget {
+  final String url;
+  const _FullScreenImage({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 5.0,
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            loadingBuilder: (_, child, progress) {
+              if (progress == null) return child;
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
+class _PdfViewerScreen extends StatefulWidget {
+  final String url;
+  final String fileName;
+  const _PdfViewerScreen({required this.url, required this.fileName});
+
+  @override
+  State<_PdfViewerScreen> createState() => _PdfViewerScreenState();
+}
+
+class _PdfViewerScreenState extends State<_PdfViewerScreen> {
+  final List<Uint8List> _pages = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final response = await http.get(Uri.parse(widget.url));
+      if (response.statusCode != 200) {
+        setState(() {
+          _error = 'Server error ${response.statusCode}';
+          _loading = false;
+        });
+        return;
+      }
+      final pages = <Uint8List>[];
+      await for (final page in Printing.raster(response.bodyBytes, dpi: 150)) {
+        pages.add(await page.toPng());
+      }
+      setState(() {
+        _pages.addAll(pages);
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.fileName,
+            style: const TextStyle(fontSize: 14),
+            overflow: TextOverflow.ellipsis),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          if (!_loading && _pages.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Text('${_pages.length} pages',
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
+              ),
+            ),
+        ],
+      ),
+      body: _error != null
+          ? Center(
+              child: Text(_error!,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center))
+          : _loading
+              ? const Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('Loading PDF...'),
+                ]))
+              : ListView.builder(
+                  itemCount: _pages.length,
+                  itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Image.memory(_pages[i], fit: BoxFit.fitWidth),
+                  ),
+                ),
+    );
   }
 }
 
