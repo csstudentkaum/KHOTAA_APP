@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum MessageType { text, image, file, voice, system }
+enum MessageType { text, image, file, voice, system, videoCall }
 
 class ChatMessage {
   final String messageID;
@@ -66,6 +66,7 @@ class ChatMessage {
       case 'file': return MessageType.file;
       case 'voice': return MessageType.voice;
       case 'system': return MessageType.system;
+      case 'videoCall': return MessageType.videoCall;
       default: return MessageType.text;
     }
   }
@@ -76,6 +77,7 @@ class ChatMessage {
       case MessageType.file: return 'file';
       case MessageType.voice: return 'voice';
       case MessageType.system: return 'system';
+      case MessageType.videoCall: return 'videoCall';
       case MessageType.text: return 'text';
     }
   }
@@ -147,6 +149,20 @@ class ChatMessage {
         messageID: '',
         senderID: 'system',
         type: MessageType.system,
+        text: text,
+        createdAt: DateTime.now(),
+      );
+
+  factory ChatMessage.videoCall({
+    required String senderID,
+    String? senderName,
+    required String text,
+  }) =>
+      ChatMessage(
+        messageID: '',
+        senderID: senderID,
+        senderName: senderName,
+        type: MessageType.videoCall,
         text: text,
         createdAt: DateTime.now(),
       );

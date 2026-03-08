@@ -156,8 +156,14 @@ class ConsultationChatService {
 
   Future<void> postVideoCallMessage(
       String consultationId, String initiatorName) async {
-    await sendSystemMessage(
-        consultationId, '$initiatorName started a video call — tap to join.');
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final msg = ChatMessage.videoCall(
+      senderID: user.uid,
+      senderName: initiatorName,
+      text: '$initiatorName started a video call',
+    );
+    await _addMessage(consultationId, msg);
   }
 
   // ── Read receipts ──

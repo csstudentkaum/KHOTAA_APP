@@ -60,6 +60,9 @@ dependencies:
   record: ^6.2.0              # voice message recording
   audioplayers: ^6.1.0        # play voice messages in chat
 
+  # Telemedicine — video call
+  agora_rtc_engine: ^6.5.2    # Agora RTC for video consultations
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

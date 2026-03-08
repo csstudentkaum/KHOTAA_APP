@@ -14,6 +14,7 @@ import '../../app/app_theme.dart';
 import '../../models/chat_message.dart';
 import '../../models/consultation.dart';
 import '../../services/firebase/consultation_chat_service.dart';
+import 'agora_video_call_screen.dart';
 
 /// Shared consultation session screen used by both patient and doctor.
 /// Pass [isDoctor] = true when launched from the doctor shell.
@@ -220,19 +221,65 @@ class _ConsultationSessionScreenState
     }
   }
 
+  bool _callInProgress = false;
+
   Future<void> _initiateVideoCall(Consultation consultation) async {
+    if (_callInProgress) return;
+    setState(() => _callInProgress = true);
+
     final me = FirebaseAuth.instance.currentUser;
     final myName = me?.displayName ??
         (widget.isDoctor ? 'Doctor' : 'Patient');
+
+    // Post a system message so the other party sees the call invite
     await _service.postVideoCallMessage(widget.consultationId, myName);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Video call feature coming soon.'),
-          backgroundColor: AppColors.primary,
-        ),
-      );
+
+    if (!mounted) {
+      _callInProgress = false;
+      return;
     }
+
+    // The other person's name to show inside the video call UI
+    final otherName = widget.isDoctor
+        ? (consultation.patientName ?? 'Patient')
+        : (consultation.doctorName ?? 'Doctor');
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AgoraVideoCallScreen(
+          channelId: consultation.agoraChannel,
+          otherPersonName: otherName,
+          consultationId: widget.consultationId,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (mounted) setState(() => _callInProgress = false);
+  }
+
+  /// Join an existing video call (patient tapping the message card).
+  /// Does NOT post a new chat message — just navigates to the Agora screen.
+  Future<void> _joinVideoCallFromMessage(Consultation consultation) async {
+    if (_callInProgress) return;
+    setState(() => _callInProgress = true);
+
+    final otherName = widget.isDoctor
+        ? (consultation.patientName ?? 'Patient')
+        : (consultation.doctorName ?? 'Doctor');
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AgoraVideoCallScreen(
+          channelId: consultation.agoraChannel,
+          otherPersonName: otherName,
+          consultationId: widget.consultationId,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (mounted) setState(() => _callInProgress = false);
   }
 
   void _showEndSessionDialog(Consultation consultation) {
@@ -261,10 +308,11 @@ class _ConsultationSessionScreenState
           appBar: _buildAppBar(consultation, isReadOnly),
           body: Column(
             children: [
-              // ── Fixed "Start Video" banner at top of chat ──
+              // ── Fixed "Start Video" banner at top of chat (doctor only) ──
               if (consultation != null &&
                   consultation.canJoin &&
-                  !isReadOnly)
+                  !isReadOnly &&
+                  widget.isDoctor)
                 GestureDetector(
                   onTap: () => _initiateVideoCall(consultation),
                   child: Container(
@@ -288,7 +336,7 @@ class _ConsultationSessionScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Video consultation is ready',
+                                'Start video call',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 13,
@@ -297,7 +345,7 @@ class _ConsultationSessionScreenState
                                 ),
                               ),
                               Text(
-                                'Tap to join the video call',
+                                'Tap to start a call with the patient',
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,
@@ -315,7 +363,7 @@ class _ConsultationSessionScreenState
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: const Text(
-                            'Join',
+                            'Start',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -326,6 +374,56 @@ class _ConsultationSessionScreenState
                         ),
                       ],
                     ),
+                  ),
+                ),
+              // ── Info banner for patient: video session notice ──
+              if (consultation != null &&
+                  consultation.canJoin &&
+                  !isReadOnly &&
+                  !widget.isDoctor)
+                Container(
+                  color: AppColors.inputFill,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.textSecondary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: const Icon(Icons.videocam_rounded,
+                            color: AppColors.textSecondary, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Video session available',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            Text(
+                              'The doctor will start the video call when ready',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.access_time_rounded,
+                          color: AppColors.textHint, size: 20),
+                    ],
                   ),
                 ),
               Expanded(
@@ -353,12 +451,29 @@ class _ConsultationSessionScreenState
                       itemBuilder: (context, i) {
                         final msg = messages[i];
                         final isMe = msg.senderID == _currentUserId;
+                        // Check if this videoCall message has a corresponding "ended" message after it
+                        bool callEnded = false;
+                        if (msg.type == MessageType.videoCall) {
+                          for (int j = i + 1; j < messages.length; j++) {
+                            if (messages[j].type == MessageType.system &&
+                                (messages[j].text?.contains('Video call ended') ?? false)) {
+                              callEnded = true;
+                              break;
+                            }
+                            // If we hit another videoCall message, stop looking
+                            if (messages[j].type == MessageType.videoCall) break;
+                          }
+                        }
                         return _MessageBubble(
                           message: msg,
                           isMe: isMe,
+                          isCallEnded: callEnded,
                           playingMessageId: _playingMessageId,
                           playingElapsedSeconds: _playingElapsedSeconds,
                           getSignedUrl: (url) => _service.getFileUrl(url),
+                          onJoinVideoCall: (msg.type == MessageType.videoCall && consultation != null && !callEnded)
+                              ? () => _joinVideoCallFromMessage(consultation)
+                              : null,
                           onPlayVoice: (msgId, pathname) async {
                             if (_playingMessageId == msgId) {
                               await _player.stop();
@@ -868,18 +983,22 @@ class _CircleButton extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
+  final bool isCallEnded;
   final String? playingMessageId;
   final int playingElapsedSeconds;
   final void Function(String msgId, String url) onPlayVoice;
   final Future<String> Function(String url) getSignedUrl;
+  final VoidCallback? onJoinVideoCall;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    this.isCallEnded = false,
     required this.playingMessageId,
     required this.playingElapsedSeconds,
     required this.onPlayVoice,
     required this.getSignedUrl,
+    this.onJoinVideoCall,
   });
 
   @override
@@ -904,6 +1023,113 @@ class _MessageBubble extends StatelessWidget {
                 fontFamily: 'Poppins',
               ),
             ),
+          ),
+        ),
+      );
+    }
+
+    // Video call message — card with Join button for the other party
+    if (message.type == MessageType.videoCall) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5F3),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFF1E8C7E).withValues(alpha: 0.3),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E8C7E),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.videocam_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      message.text ?? 'Video call started',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0D1B2A),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              // Show "Join" button only for the person who did NOT start the call AND call not ended
+              if (!isMe && onJoinVideoCall != null && !isCallEnded) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: onJoinVideoCall,
+                    icon: const Icon(Icons.videocam_rounded, size: 18),
+                    label: const Text('Tap to join'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E8C7E),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              // Show ended state
+              if (isCallEnded)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.call_end_rounded,
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                          size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Call ended',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary.withValues(alpha: 0.7),
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              // Show "Waiting" for the sender only when call is still active
+              if (isMe && !isCallEnded)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Waiting for the other party to join…',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary.withValues(alpha: 0.7),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       );
@@ -1249,6 +1475,9 @@ class _MessageBubble extends StatelessWidget {
 
       case MessageType.system:
         return const SizedBox.shrink();
+
+      case MessageType.videoCall:
+        return const SizedBox.shrink();
     }
   }
 
@@ -1437,12 +1666,13 @@ class _EndSessionDialogState extends State<_EndSessionDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+        padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
         child: _isSaving
             ? const SizedBox(
-                height: 100,
+                height: 140,
                 child: Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
@@ -1451,33 +1681,59 @@ class _EndSessionDialogState extends State<_EndSessionDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'End Session',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Poppins',
-                      color: AppColors.textPrimary,
-                    ),
+                  // Header icon + title
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.medical_services_rounded,
+                          color: AppColors.primary,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'End Session',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Poppins',
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'How would you like to close this consultation?',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textHint,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'How would you like to close this consultation?',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textHint,
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 28),
                   _EndOptionTile(
                     icon: Icons.check_circle_rounded,
                     iconColor: AppColors.success,
                     title: 'Complete Session',
-                    subtitle: 'Mark consultation as finished',
+                    subtitle: 'Mark this consultation as finished',
                     onTap: _complete,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   _EndOptionTile(
                     icon: Icons.event_repeat_rounded,
                     iconColor: AppColors.primary,
@@ -1485,17 +1741,26 @@ class _EndSessionDialogState extends State<_EndSessionDialog> {
                     subtitle: 'Request a follow-up appointment',
                     onTap: _followUp,
                   ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
                     child: TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                              color: AppColors.textHint.withValues(alpha: 0.3)),
+                        ),
+                      ),
                       onPressed: () => Navigator.of(context).pop(),
                       child: const Text(
                         'Cancel',
                         style: TextStyle(
                           color: AppColors.textHint,
                           fontFamily: 'Poppins',
-                          fontSize: 13,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -1526,18 +1791,26 @@ class _EndOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(13),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         decoration: BoxDecoration(
           color: iconColor.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: iconColor.withValues(alpha: 0.22)),
         ),
         child: Row(
           children: [
-            Icon(icon, color: iconColor, size: 26),
-            const SizedBox(width: 14),
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 26),
+            ),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1545,16 +1818,17 @@ class _EndOptionTile extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       fontFamily: 'Poppins',
                       color: iconColor,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 12,
                       color: AppColors.textHint,
                       fontFamily: 'Poppins',
                     ),
@@ -1563,7 +1837,7 @@ class _EndOptionTile extends StatelessWidget {
               ),
             ),
             Icon(Icons.arrow_forward_ios_rounded,
-                size: 13, color: iconColor.withValues(alpha: 0.5)),
+                size: 15, color: iconColor.withValues(alpha: 0.5)),
           ],
         ),
       ),
