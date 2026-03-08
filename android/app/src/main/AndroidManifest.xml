@@ -1,5 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Microphone for voice messages -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Camera for taking wound photos -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Storage for reading/sending files and images -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
     <application
         android:label="khotaa_app"
         android:name="${applicationName}"

@@ -2,17 +2,94 @@ rules_version='2'
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Users ──────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Read is open to unauthenticated — needed for phone lookup during login
+      // (findUserByPhone is called before OTP verification, so no auth token yet)
+      allow read: if true;
+      // Write only by the owner (registration writes own document after auth)
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Consultations ──────────────────────────────────────────────────────
+    match /consultations/{consultationId} {
+      // Allow read/write only to the patient or doctor of this consultation
+      allow read, write: if request.auth != null
+        && (request.auth.uid == resource.data.patientID
+            || request.auth.uid == resource.data.doctorID);
+
+      // Allow creation if the authenticated user is setting themselves as patient
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.patientID;
+
+      // ── Messages subcollection ──────────────────────────────────────────
+      match /messages/{messageId} {
+        // Only the consultation's patient and doctor can read messages
+        allow read: if request.auth != null
+          && (request.auth.uid == get(/databases/$(database)/documents/consultations/$(consultationId)).data.patientID
+              || request.auth.uid == get(/databases/$(database)/documents/consultations/$(consultationId)).data.doctorID);
+
+        // Patient or doctor can send messages; system messages (senderID='system') allowed too
+        allow create: if request.auth != null
+          && (request.auth.uid == get(/databases/$(database)/documents/consultations/$(consultationId)).data.patientID
+              || request.auth.uid == get(/databases/$(database)/documents/consultations/$(consultationId)).data.doctorID
+              || request.resource.data.senderID == 'system');
+
+        // Only allow updating the isRead field (read receipts).
+        // All other fields remain immutable. Deletes are never allowed.
+        allow update: if request.auth != null
+          && (request.auth.uid == get(/databases/$(database)/documents/consultations/$(consultationId)).data.patientID
+              || request.auth.uid == get(/databases/$(database)/documents/consultations/$(consultationId)).data.doctorID)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+        allow delete: if false;
+      }
+    }
+
+    // ── Devices — owned by patient ─────────────────────────────────────────
+    match /devices/{deviceId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Alerts — patient & doctor access ──────────────────────────────────
+    match /alerts/{alertId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Sensor readings ────────────────────────────────────────────────────
+    match /sensor_readings/{readingId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Medical images ─────────────────────────────────────────────────────
+    match /medical_images/{imageId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Image analysis results ─────────────────────────────────────────────
+    match /image_analysis/{analysisId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Treatment plans ────────────────────────────────────────────────────
+    match /treatment_plans/{planId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Weekly reports ─────────────────────────────────────────────────────
+    match /weekly_reports/{reportId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Preventive recommendations ─────────────────────────────────────────
+    match /preventive_recommendations/{recId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Everything else — deny ─────────────────────────────────────────────
     match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 3, 8);
+      allow read, write: if false;
     }
   }
 }
+

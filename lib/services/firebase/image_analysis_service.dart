@@ -2,9 +2,9 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../app/config.dart';
 import '../../models/medical_images.dart';
 import '../../models/image_analysis.dart';
 
@@ -14,7 +14,6 @@ import '../../models/image_analysis.dart';
 ///   3. Run classification (simulated until ML endpoint is ready)
 ///   4. Save ImageAnalysis doc → Firestore
 class ImageAnalysisService {
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -24,8 +23,8 @@ class ImageAnalysisService {
   /// Set to `true` to save images & records to Vercel Blob + Firestore.
   static const bool persistData = true;
 
-  /// Your Vercel server base URL.
-  static const String _serverUrl = 'https://khotaa-email-server.vercel.app';
+  /// Your Vercel server base URL — read from AppConfig (never hardcoded).
+  String get _serverUrl => AppConfig.serverUrl;
 
   String? get _uid => _auth.currentUser?.uid;
 

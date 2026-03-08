@@ -54,6 +54,12 @@ dependencies:
   path_provider: ^2.1.5
   intl: ^0.19.0
 
+  # Telemedicine — chat & session
+  file_picker: ^8.1.7         # send files/documents in chat
+  permission_handler: ^11.4.0 # microphone, camera, storage
+  record: ^6.2.0              # voice message recording
+  audioplayers: ^6.1.0        # play voice messages in chat
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
