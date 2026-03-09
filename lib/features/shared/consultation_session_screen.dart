@@ -304,7 +304,7 @@ class _ConsultationSessionScreenState
             consultation != null && consultation.isCompleted;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFEDF3F2),
+          backgroundColor: const Color(0xFFF0F2F5),
           appBar: _buildAppBar(consultation, isReadOnly),
           body: Column(
             children: [
@@ -313,70 +313,81 @@ class _ConsultationSessionScreenState
                   consultation.canJoin &&
                   !isReadOnly &&
                   widget.isDoctor)
-                GestureDetector(
-                  onTap: () => _initiateVideoCall(consultation),
-                  child: Container(
-                    color: const Color(0xFF1E8C7E),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(7),
-                          decoration: BoxDecoration(
-                            color: AppColors.success,
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: const Icon(Icons.videocam_rounded,
-                              color: Colors.white, size: 18),
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Start video call',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Poppins',
-                                ),
+                        child: const Icon(Icons.videocam_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Start video call',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Poppins',
                               ),
-                              Text(
-                                'Tap to start a call with the patient',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                  fontFamily: 'Poppins',
-                                ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Tap to start a call with the patient',
+                              style: TextStyle(
+                                color: AppColors.textHint,
+                                fontSize: 12,
+                                fontFamily: 'Poppins',
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        Container(
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: () => _initiateVideoCall(consultation),
+                        child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 7),
+                              horizontal: 18, vertical: 9),
                           decoration: BoxDecoration(
-                            color: AppColors.success,
-                            borderRadius: BorderRadius.circular(18),
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Text(
                             'Start',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                               fontFamily: 'Poppins',
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              // ── Info banner for patient: video session notice ──
+              // Divider under video call banner
+              if (consultation != null &&
+                  consultation.canJoin &&
+                  !isReadOnly &&
+                  widget.isDoctor)
+                Container(
+                  height: 1,
+                  color: Colors.black.withValues(alpha: 0.08),
+                ),
               if (consultation != null &&
                   consultation.canJoin &&
                   !isReadOnly &&
@@ -546,7 +557,7 @@ class _ConsultationSessionScreenState
         ? (consultation?.patientName ?? 'Patient')
         : (consultation?.doctorName ?? 'Doctor');
     final initial = otherName.isNotEmpty ? otherName[0].toUpperCase() : '?';
-    final isActive = consultation?.status == ConsultationStatus.active;
+    final isActive = consultation?.status == 'active';
 
     return AppBar(
       backgroundColor: AppColors.primary,
@@ -603,30 +614,30 @@ class _ConsultationSessionScreenState
         ],
       ),
       actions: [
-        // ── End Session (doctor only) — clean outlined style ──
+        // ── End Session (doctor only) ──
         if (widget.isDoctor && !isReadOnly)
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 14),
             child: OutlinedButton(
               onPressed: consultation != null
                   ? () => _showEndSessionDialog(consultation)
                   : null,
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white54, width: 1.2),
+                side: const BorderSide(color: Colors.white70, width: 1.4),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 4),
+                    horizontal: 18, vertical: 8),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
+                    borderRadius: BorderRadius.circular(22)),
               ),
               child: const Text(
                 'End Session',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   fontFamily: 'Poppins',
                 ),
               ),
@@ -636,21 +647,21 @@ class _ConsultationSessionScreenState
     );
   }
 
-  String _statusLabel(ConsultationStatus? status) {
+  String _statusLabel(String? status) {
     switch (status) {
-      case ConsultationStatus.pending:
+      case 'pending':
         return 'Pending confirmation';
-      case ConsultationStatus.accepted:
+      case 'accepted':
         return 'Accepted';
-      case ConsultationStatus.active:
+      case 'active':
         return 'Online';
-      case ConsultationStatus.followUp:
+      case 'followUp':
         return 'Follow-up';
-      case ConsultationStatus.completed:
+      case 'completed':
         return 'Session ended';
-      case ConsultationStatus.rejected:
+      case 'rejected':
         return 'Rejected';
-      case null:
+      default:
         return '';
     }
   }
@@ -742,7 +753,7 @@ class _InputBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFEDF3F2),
+      color: const Color(0xFFF0F2F5),
       padding: EdgeInsets.only(
         left: 8,
         right: 8,
@@ -921,7 +932,7 @@ class _InputBar extends StatelessWidget {
               ),
               title: const Text('Photo',
                   style: TextStyle(fontFamily: 'Poppins')),
-              subtitle: const Text('Send a wound photo from gallery',
+              subtitle: const Text('Send a photo from gallery',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
               onTap: () {
                 Navigator.pop(context);
@@ -1012,7 +1023,7 @@ class _MessageBubble extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFE1F0EE),
+              color: const Color(0xFFE8EAED),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -1035,10 +1046,10 @@ class _MessageBubble extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFFE8F5F3),
+            color: const Color(0xFFF0F4F8),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFF1E8C7E).withValues(alpha: 0.3),
+              color: AppColors.primary.withValues(alpha: 0.15),
             ),
           ),
           child: Column(
@@ -1049,7 +1060,7 @@ class _MessageBubble extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E8C7E),
+                      color: AppColors.primary,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.videocam_rounded,
@@ -1062,7 +1073,7 @@ class _MessageBubble extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF0D1B2A),
+                        color: AppColors.textPrimary,
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1079,7 +1090,7 @@ class _MessageBubble extends StatelessWidget {
                     icon: const Icon(Icons.videocam_rounded, size: 18),
                     label: const Text('Tap to join'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E8C7E),
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -1146,11 +1157,11 @@ class _MessageBubble extends StatelessWidget {
           if (!isMe) ...[
             CircleAvatar(
               radius: 14,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+              backgroundColor: const Color(0xFFE0E3E7),
               child: Text(
                 (message.senderName ?? '?')[0].toUpperCase(),
                 style: const TextStyle(
-                  color: AppColors.primary,
+                  color: Color(0xFF5F6368),
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Poppins',
@@ -1175,7 +1186,7 @@ class _MessageBubble extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
+                        color: Color(0xFF455A64),
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1238,7 +1249,7 @@ class _MessageBubble extends StatelessWidget {
             message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
             size: 14,
             color: message.isRead
-                ? AppColors.success // green = read
+                ? const Color(0xFF34B7F1) // blue = read
                 : AppColors.textHint, // grey = sent
           ),
         ],
@@ -1353,7 +1364,7 @@ class _MessageBubble extends StatelessWidget {
                 Icon(
                   Icons.insert_drive_file_rounded,
                   size: 28,
-                  color: isMe ? Colors.white70 : AppColors.primary,
+                  color: isMe ? Colors.white70 : const Color(0xFF607D8B),
                 ),
                 const SizedBox(width: 8),
                 Flexible(
@@ -1365,7 +1376,7 @@ class _MessageBubble extends StatelessWidget {
                       fontFamily: 'Poppins',
                       decoration: TextDecoration.underline,
                       decorationColor:
-                          isMe ? Colors.white70 : AppColors.primary,
+                          isMe ? Colors.white70 : const Color(0xFF607D8B),
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -1386,8 +1397,8 @@ class _MessageBubble extends StatelessWidget {
             ? (playingElapsedSeconds / totalSec).clamp(0.0, 1.0)
             : 0.0;
         final bubbleColor = isMe ? AppColors.primary : Colors.white;
-        final onBubble = isMe ? Colors.white : AppColors.primary;
-        final onBubbleFaint = isMe ? Colors.white54 : AppColors.primary.withOpacity(0.35);
+        final onBubble = isMe ? Colors.white : const Color(0xFF607D8B);
+        final onBubbleFaint = isMe ? Colors.white54 : const Color(0xFFB0BEC5);
         return Container(
           constraints: const BoxConstraints(minWidth: 200, maxWidth: 260),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),

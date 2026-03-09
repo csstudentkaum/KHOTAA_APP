@@ -111,19 +111,19 @@ class _ConsultationsTab extends StatelessWidget {
           // Group by status for clarity
           final active = consultations
               .where((c) =>
-                  c.status == ConsultationStatus.active ||
-                  c.status == ConsultationStatus.accepted)
+                  c.status == 'active' ||
+                  c.status == 'accepted')
               .toList();
           final pending = consultations
-              .where((c) => c.status == ConsultationStatus.pending)
+              .where((c) => c.status == 'pending')
               .toList();
           final followUp = consultations
-              .where((c) => c.status == ConsultationStatus.followUp)
+              .where((c) => c.status == 'followUp')
               .toList();
           final done = consultations
               .where((c) =>
-                  c.status == ConsultationStatus.completed ||
-                  c.status == ConsultationStatus.rejected)
+                  c.status == 'completed' ||
+                  c.status == 'rejected')
               .toList();
 
           return ListView(
@@ -266,19 +266,20 @@ class _DoctorConsultCard extends StatelessWidget {
 }
 
 class _StatusDot extends StatelessWidget {
-  final ConsultationStatus status;
+  final String status;
   const _StatusDot({required this.status});
 
   @override
   Widget build(BuildContext context) {
     Color color;
     switch (status) {
-      case ConsultationStatus.pending: color = AppColors.warning; break;
-      case ConsultationStatus.accepted: color = AppColors.primary; break;
-      case ConsultationStatus.active: color = AppColors.success; break;
-      case ConsultationStatus.followUp: color = AppColors.primaryLight; break;
-      case ConsultationStatus.completed: color = AppColors.textHint; break;
-      case ConsultationStatus.rejected: color = AppColors.error; break;
+      case 'pending': color = AppColors.warning; break;
+      case 'accepted': color = AppColors.primary; break;
+      case 'active': color = AppColors.success; break;
+      case 'followUp': color = AppColors.primaryLight; break;
+      case 'completed': color = AppColors.textHint; break;
+      case 'rejected': color = AppColors.error; break;
+      default: color = AppColors.textHint;
     }
     return Container(
       width: 10,

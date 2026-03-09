@@ -96,7 +96,7 @@ class _ConsultationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = consultation.status;
-    final canTap = status != ConsultationStatus.rejected;
+    final canTap = status != 'rejected';
 
     return GestureDetector(
       onTap: canTap
@@ -201,14 +201,15 @@ class _ConsultationCard extends StatelessWidget {
     );
   }
 
-  Color _statusColor(ConsultationStatus s) {
+  Color _statusColor(String s) {
     switch (s) {
-      case ConsultationStatus.pending: return AppColors.warning;
-      case ConsultationStatus.accepted: return AppColors.primary;
-      case ConsultationStatus.active: return AppColors.success;
-      case ConsultationStatus.followUp: return AppColors.primaryLight;
-      case ConsultationStatus.completed: return AppColors.textHint;
-      case ConsultationStatus.rejected: return AppColors.error;
+      case 'pending': return AppColors.warning;
+      case 'accepted': return AppColors.primary;
+      case 'active': return AppColors.success;
+      case 'followUp': return AppColors.primaryLight;
+      case 'completed': return AppColors.textHint;
+      case 'rejected': return AppColors.error;
+      default: return AppColors.textHint;
     }
   }
 }
@@ -216,7 +217,7 @@ class _ConsultationCard extends StatelessWidget {
 // ────────────────────────────────────────────────────────────────────────────
 
 class _StatusBadge extends StatelessWidget {
-  final ConsultationStatus status;
+  final String status;
 
   const _StatusBadge({required this.status});
 
@@ -243,18 +244,20 @@ class _StatusBadge extends StatelessWidget {
 
   (String, Color, Color) _info() {
     switch (status) {
-      case ConsultationStatus.pending:
+      case 'pending':
         return ('Pending', const Color(0xFFFFF3CD), const Color(0xFF856404));
-      case ConsultationStatus.accepted:
+      case 'accepted':
         return ('Accepted', const Color(0xFFD1F0EC), AppColors.primaryDark);
-      case ConsultationStatus.active:
+      case 'active':
         return ('Active', const Color(0xFFD4EDDA), const Color(0xFF155724));
-      case ConsultationStatus.followUp:
+      case 'followUp':
         return ('Follow-up', const Color(0xFFCCE5FF), const Color(0xFF004085));
-      case ConsultationStatus.completed:
+      case 'completed':
         return ('Completed', const Color(0xFFF8F9FA), AppColors.textSecondary);
-      case ConsultationStatus.rejected:
+      case 'rejected':
         return ('Rejected', const Color(0xFFF8D7DA), const Color(0xFF721C24));
+      default:
+        return ('Unknown', const Color(0xFFF8F9FA), AppColors.textSecondary);
     }
   }
 }

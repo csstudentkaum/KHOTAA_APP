@@ -123,7 +123,7 @@ class ConsultationChatService {
 
   Future<void> activateSession(String consultationId) async {
     await _consultation(consultationId).update({
-      'status': ConsultationStatus.active.value,
+      'status': 'active',
       'updatedAt': FieldValue.serverTimestamp(),
     });
     await sendSystemMessage(consultationId, 'Session started.');
@@ -136,7 +136,7 @@ class ConsultationChatService {
       String? prescription,
     }) async {
     await _consultation(consultationId).update({
-      'status': ConsultationStatus.completed.value,
+      'status': 'completed',
       'notes': notes,
       'diagnosis': diagnosis,
       'prescription': prescription,
@@ -147,7 +147,7 @@ class ConsultationChatService {
 
   Future<void> scheduleFollowUp(String consultationId) async {
     await _consultation(consultationId).update({
-      'status': ConsultationStatus.followUp.value,
+      'status': 'followUp',
       'updatedAt': FieldValue.serverTimestamp(),
     });
     await sendSystemMessage(
