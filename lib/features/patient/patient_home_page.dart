@@ -25,7 +25,6 @@ class PatientHomePage extends StatefulWidget {
 class _PatientHomePageState extends State<PatientHomePage>
     with SingleTickerProviderStateMixin {
   int _currentTipIndex = 0;
-  int _selectedNavIndex = 0;
   String _userName = 'User'; // Default name
 
   final List<String> _tips = [
@@ -108,36 +107,30 @@ class _PatientHomePageState extends State<PatientHomePage>
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        bottom: false,
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 16),
-                        // Header with greeting and notification
-                        _buildHeader(),
-                        const SizedBox(height: 20),
-                        // Tips carousel
-                        _buildTipsCarousel(),
-                        const SizedBox(height: 24),
-                        // Feature cards grid
-                        _buildFeatureCards(),
-                        const SizedBox(height: 24),
-                        // Upcoming appointments
-                        _buildUpcomingAppointments(),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ),
-                ),
-                // Bottom navigation bar
-                _buildBottomNavBar(),
-              ],
+            SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  // Header with greeting and notification
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  // Tips carousel
+                  _buildTipsCarousel(),
+                  const SizedBox(height: 24),
+                  // Feature cards grid
+                  _buildFeatureCards(),
+                  const SizedBox(height: 24),
+                  // Upcoming appointments
+                  _buildUpcomingAppointments(),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
             // Floating Emergency Button
             _buildEmergencyButton(),
@@ -150,7 +143,7 @@ class _PatientHomePageState extends State<PatientHomePage>
   Widget _buildEmergencyButton() {
     return Positioned(
       right: 20,
-      bottom: 90,
+      bottom: 20,
       child: ScaleTransition(
         scale: _pulseAnimation,
         child: GestureDetector(
@@ -493,73 +486,6 @@ class _PatientHomePageState extends State<PatientHomePage>
     );
   }
 
-  Widget _buildBottomNavBar() {
-    return Container(
-      height: 70,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _NavBarItem(
-            icon: Icons.home_filled,
-            isSelected: _selectedNavIndex == 0,
-            onTap: () => setState(() => _selectedNavIndex = 0),
-          ),
-          _NavBarItem(
-            icon: Icons.camera_alt_outlined,
-            isSelected: _selectedNavIndex == 1,
-            onTap: () {
-              setState(() => _selectedNavIndex = 1);
-              _showSnackBar('Camera - Foot Scan');
-            },
-          ),
-          _NavBarItem(
-            icon: Icons.bluetooth,
-            isSelected: _selectedNavIndex == 2,
-            onTap: () async {
-              setState(() => _selectedNavIndex = 2);
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ConnectInsoleScreen(),
-                ),
-              );
-              // Reset to home when returning from Bluetooth screen
-              if (mounted) {
-                setState(() => _selectedNavIndex = 0);
-              }
-            },
-          ),
-          _NavBarItem(
-            icon: Icons.calendar_today_outlined,
-            isSelected: _selectedNavIndex == 3,
-            onTap: () {
-              setState(() => _selectedNavIndex = 3);
-              _showSnackBar('Appointments');
-            },
-          ),
-          _NavBarItem(
-            icon: Icons.person_outline,
-            isSelected: _selectedNavIndex == 4,
-            onTap: () {
-              setState(() => _selectedNavIndex = 4);
-              _showSnackBar('Profile');
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -856,32 +782,4 @@ class _AppointmentCard extends StatelessWidget {
   }
 }
 
-/// Bottom Navigation Bar Item
-class _NavBarItem extends StatelessWidget {
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
 
-  const _NavBarItem({
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Icon(
-          icon,
-          size: 26,
-          color: isSelected ? const Color(0xFF2A9D8F) : const Color(0xFF9CA3AF),
-        ),
-      ),
-    );
-  }
-}

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../shared/widgets/bottom_nav_bar.dart';
-import 'home_screen.dart';
+import 'patient_home_page.dart';
 import 'ai_doctor_screen.dart';
 import 'connect_insole_screen.dart';
 import 'appointment_screen.dart';
@@ -19,7 +19,7 @@ class _PatientShellState extends State<PatientShell> {
   int _tab = 0;
 
   static const _screens = <Widget>[
-    HomeScreen(),
+    PatientHomePage(),
     AiDoctorScreen(),
     ConnectInsoleScreen(),
     AppointmentScreen(),
@@ -28,7 +28,14 @@ class _PatientShellState extends State<PatientShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          setState(() => _tab = 0);
+        }
+      },
+      child: Scaffold(
       body: IndexedStack(index: _tab, children: _screens),
       floatingActionButton: _tab == 1
           ? Padding(
@@ -51,6 +58,7 @@ class _PatientShellState extends State<PatientShell> {
         currentIndex: _tab,
         onTap: (i) => setState(() => _tab = i),
       ),
+    ),
     );
   }
 }

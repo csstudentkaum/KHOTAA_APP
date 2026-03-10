@@ -203,7 +203,14 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            // Find the PatientShell ancestor and switch to home tab
+            final shellState = context.findAncestorStateOfType<State>();
+            if (shellState != null && shellState.mounted) {
+              // Use the back button behavior from PopScope
+              Navigator.maybePop(context);
+            }
+          },
         ),
       ),
       body: Column(

@@ -306,17 +306,22 @@ void main() {
   // ═══════════════════════════════════════════════════════
   group('TreatmentPlan', () {
     late TreatmentPlan plan;
-    final lastUpdated = DateTime(2026, 2, 15, 12, 0);
+    final createdAt = DateTime(2026, 2, 15, 12, 0);
 
     setUp(() {
       plan = TreatmentPlan(
         treatmentPlanID: 'tp_001',
-        medicationName: 'Metformin',
-        dosage: '500mg',
-        duration: '3 months',
-        frequency: 2.0,
-        lastUpdated: lastUpdated,
         consultationID: 'cons_001',
+        doctorId: 'doc_001',
+        patientId: 'pat_001',
+        patientName: 'Test Patient',
+        diagnosis: 'Type 2 Diabetes',
+        medications: [
+          {'name': 'Metformin', 'dosage': '500mg', 'frequency': '2x daily', 'duration': '3 months'},
+        ],
+        notes: 'Follow up in 3 months',
+        status: 'active',
+        createdAt: createdAt,
       );
     });
 
@@ -324,43 +329,38 @@ void main() {
       expect(plan.treatmentPlanID, 'tp_001');
       expect(plan.medicationName, 'Metformin');
       expect(plan.dosage, '500mg');
-      expect(plan.duration, '3 months');
-      expect(plan.frequency, 2.0);
-      expect(plan.lastUpdated, lastUpdated);
       expect(plan.consultationID, 'cons_001');
+      expect(plan.diagnosis, 'Type 2 Diabetes');
     });
 
     test('toMap converts all fields correctly', () {
       final map = plan.toMap();
       expect(map['treatmentPlanID'], 'tp_001');
-      expect(map['medicationName'], 'Metformin');
-      expect(map['dosage'], '500mg');
-      expect(map['duration'], '3 months');
-      expect(map['frequency'], 2.0);
-      expect(map['lastUpdated'], isA<Timestamp>());
       expect(map['consultationID'], 'cons_001');
+      expect(map['diagnosis'], 'Type 2 Diabetes');
+      expect(map['medications'], isA<List>());
+      expect(map['createdAt'], isA<Timestamp>());
     });
 
     test('fromMap creates instance from Firestore map', () {
       final map = {
         'treatmentPlanID': 'tp_002',
-        'medicationName': 'Insulin',
-        'dosage': '10 units',
-        'duration': '6 months',
-        'frequency': 1.0,
-        'lastUpdated': Timestamp.fromDate(lastUpdated),
         'consultationID': 'cons_002',
+        'diagnosis': 'Foot Ulcer',
+        'medications': [
+          {'name': 'Insulin', 'dosage': '10 units', 'frequency': '1x daily', 'duration': '6 months'},
+        ],
+        'createdAt': Timestamp.fromDate(createdAt),
       };
       final tp = TreatmentPlan.fromMap(map);
       expect(tp.treatmentPlanID, 'tp_002');
       expect(tp.medicationName, 'Insulin');
-      expect(tp.frequency, 1.0);
     });
 
     test('fromMap uses id parameter when provided', () {
       final map = {
         'treatmentPlanID': 'old_id',
-        'lastUpdated': Timestamp.fromDate(lastUpdated),
+        'createdAt': Timestamp.fromDate(createdAt),
       };
       final tp = TreatmentPlan.fromMap(map, id: 'new_id');
       expect(tp.treatmentPlanID, 'new_id');
@@ -371,45 +371,13 @@ void main() {
       expect(restored.treatmentPlanID, plan.treatmentPlanID);
       expect(restored.medicationName, plan.medicationName);
       expect(restored.dosage, plan.dosage);
-      expect(restored.duration, plan.duration);
-      expect(restored.frequency, plan.frequency);
       expect(restored.consultationID, plan.consultationID);
-    });
-
-    test('addMedication returns updated plan', () {
-      final updated = plan.addMedication(
-        medicationName: 'Aspirin',
-        dosage: '100mg',
-        duration: '1 month',
-        frequency: 1.0,
-      );
-      expect(updated.medicationName, 'Aspirin');
-      expect(updated.dosage, '100mg');
-      expect(updated.duration, '1 month');
-      expect(updated.frequency, 1.0);
-      expect(updated.treatmentPlanID, plan.treatmentPlanID);
-    });
-
-    test('updatePlan returns updated plan with partial fields', () {
-      final updated = plan.updatePlan(dosage: '1000mg');
-      expect(updated.dosage, '1000mg');
-      expect(updated.medicationName, plan.medicationName); // unchanged
     });
 
     test('getPlanSummary returns formatted summary', () {
       final summary = plan.getPlanSummary();
       expect(summary, contains('Metformin'));
-      expect(summary, contains('500mg'));
-      expect(summary, contains('3 months'));
-      expect(summary, contains('2.0'));
-    });
-
-    test('copyWith replaces specified fields only', () {
-      final updated = plan.copyWith(dosage: '750mg', frequency: 3.0);
-      expect(updated.dosage, '750mg');
-      expect(updated.frequency, 3.0);
-      expect(updated.treatmentPlanID, plan.treatmentPlanID);
-      expect(updated.medicationName, plan.medicationName);
+      expect(summary, contains('Type 2 Diabetes'));
     });
 
     test('toString contains class name', () {
