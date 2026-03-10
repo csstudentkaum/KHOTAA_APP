@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-// ── Figma palette ───────────────────────────────────────────────────
-const _kTeal = Color(0xFF64ADB3);
+import '../../app/app_theme.dart';
 
 /// Payment success — congratulations screen with check icon
 class PaymentSuccessScreen extends StatelessWidget {
@@ -10,7 +8,7 @@ class PaymentSuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -22,8 +20,8 @@ class PaymentSuccessScreen extends StatelessWidget {
               Container(
                 width: 180,
                 height: 180,
-                decoration: const BoxDecoration(
-                  color: _kTeal,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -40,8 +38,7 @@ class PaymentSuccessScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  fontStyle: FontStyle.italic,
-                  color: _kTeal,
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 14),
@@ -51,7 +48,7 @@ class PaymentSuccessScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A1A1A),
+                  color: AppColors.textPrimary,
                 ),
               ),
 
@@ -67,7 +64,7 @@ class PaymentSuccessScreen extends StatelessWidget {
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _kTeal,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),

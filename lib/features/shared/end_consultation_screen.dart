@@ -39,20 +39,6 @@ class _EndConsultationScreenState extends State<EndConsultationScreen> {
   bool _taskFeeling = false;
   bool _taskMedication = false;
 
-  // DFU-specific autocomplete suggestions (from Manar's branch)
-  static const _diagnosisSuggestions = [
-    'Diabetic Foot Ulcer',
-    'Peripheral Neuropathy',
-    'Charcot Foot',
-    'Plantar Fasciitis',
-    'Diabetic Foot Infection',
-    'Peripheral Artery Disease',
-    'Callus / Corn Formation',
-    'Ingrown Toenail',
-    'Dry / Cracked Skin',
-    'Fungal Infection',
-  ];
-
   static const _medicationSuggestions = [
     'Metformin',
     'Insulin Glargine',

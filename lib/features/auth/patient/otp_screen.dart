@@ -418,7 +418,7 @@ class _OtpScreenState extends State<OtpScreen> {
     return ClipPath(
       clipper: _OtpHeaderClipper(),
       child: Container(
-        height: size.height * 0.18,
+        height: size.height * 0.22,
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -428,30 +428,39 @@ class _OtpScreenState extends State<OtpScreen> {
           ),
         ),
         child: SafeArea(
-          child: Align(
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(30),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.favorite,
-                      size: 22, color: Colors.white),
+          child: Stack(
+            children: [
+              Positioned(
+                top: 4,
+                left: 4,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new,
+                      color: Colors.white, size: 22),
+                  onPressed: () => Navigator.pop(context),
                 ),
-                const SizedBox(width: 10),
-                const Text('KHOTAA',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 4)),
-              ],
-            ),
+              ),
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/images/khotaa_logo_white.png',
+                      width: 60,
+                      height: 60,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'KHOTAA',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -463,9 +472,9 @@ class _OtpHeaderClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path()
-      ..lineTo(0, size.height - 25)
+      ..lineTo(0, size.height - 30)
       ..quadraticBezierTo(
-          size.width / 2, size.height + 12, size.width, size.height - 25)
+          size.width / 2, size.height + 15, size.width, size.height - 30)
       ..lineTo(size.width, 0)
       ..close();
     return path;
