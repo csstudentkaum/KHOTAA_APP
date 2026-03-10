@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../app/config.dart';
 import '../../models/chat_message.dart';
 import '../../models/consultation.dart';
+import '../../models/treatment_plan.dart';
 
 class ConsultationChatService {
   final _db = FirebaseFirestore.instance;
@@ -143,6 +144,146 @@ class ConsultationChatService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     await sendSystemMessage(consultationId, 'Session completed.');
+  }
+
+  /// Complete consultation with full summary + treatment plan.
+  /// If a treatment plan already exists (e.g. from a follow-up), it updates it.
+  Future<void> completeWithSummary({
+    required String consultationId,
+    required String diagnosis,
+    required String notes,
+    required String prescription,
+    required List<Map<String, String>> medications,
+    required String treatmentNotes,
+  }) async {
+    final consultDoc = await _consultation(consultationId).get();
+    final consultData = consultDoc.data() ?? {};
+
+    // Create or update treatment plan
+    final existingPlanId = consultData['treatmentPlanID'] as String?;
+    final planRef = existingPlanId != null && existingPlanId.isNotEmpty
+        ? _db.collection('treatment_plans').doc(existingPlanId)
+        : _db.collection('treatment_plans').doc();
+
+    final plan = TreatmentPlan(
+      treatmentPlanID: planRef.id,
+      consultationID: consultationId,
+      doctorId: _auth.currentUser?.uid ?? '',
+      patientId: consultData['patientID'] as String? ?? '',
+      patientName: consultData['patientName'] as String? ?? '',
+      diagnosis: diagnosis,
+      medications: medications,
+      notes: treatmentNotes,
+      status: 'active',
+      createdAt: DateTime.now(),
+    );
+    await planRef.set(plan.toMap());
+
+    // Update consultation
+    await _consultation(consultationId).update({
+      'status': 'completed',
+      'diagnosis': diagnosis,
+      'notes': notes,
+      'prescription': prescription,
+      'treatmentPlanID': planRef.id,
+      'endTime': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    await sendSystemMessage(consultationId,
+        'Session completed. Treatment plan is available.');
+  }
+
+  /// Set follow-up with treatment plan + tasks.
+  Future<void> setFollowUpWithPlan({
+    required String consultationId,
+    required String diagnosis,
+    required String notes,
+    required String prescription,
+    required List<Map<String, String>> medications,
+    required String treatmentNotes,
+    required int followUpDays,
+    required List<Map<String, dynamic>> followUpTasks,
+    String? followUpInstructions,
+  }) async {
+    final consultDoc = await _consultation(consultationId).get();
+    final consultData = consultDoc.data() ?? {};
+
+    // Create or update treatment plan
+    final existingPlanId = consultData['treatmentPlanID'] as String?;
+    final planRef = existingPlanId != null && existingPlanId.isNotEmpty
+        ? _db.collection('treatment_plans').doc(existingPlanId)
+        : _db.collection('treatment_plans').doc();
+
+    final plan = TreatmentPlan(
+      treatmentPlanID: planRef.id,
+      consultationID: consultationId,
+      doctorId: _auth.currentUser?.uid ?? '',
+      patientId: consultData['patientID'] as String? ?? '',
+      patientName: consultData['patientName'] as String? ?? '',
+      diagnosis: diagnosis,
+      medications: medications,
+      notes: treatmentNotes,
+      status: 'active',
+      createdAt: DateTime.now(),
+    );
+    await planRef.set(plan.toMap());
+
+    final dueDate = DateTime.now().add(Duration(days: followUpDays));
+
+    await _consultation(consultationId).update({
+      'status': 'followUp',
+      'diagnosis': diagnosis,
+      'notes': notes,
+      'prescription': prescription,
+      'treatmentPlanID': planRef.id,
+      'followUpDueDate': Timestamp.fromDate(dueDate),
+      'followUpTasks': followUpTasks,
+      'followUpInstructions': followUpInstructions,
+      'followUpCheckIn': null,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    final dueStr = '${dueDate.day}/${dueDate.month}/${dueDate.year}';
+    await sendSystemMessage(consultationId,
+        'Follow-up care started. Treatment plan is available. Next review: $dueStr');
+  }
+
+  /// Patient submits follow-up check-in.
+  Future<void> submitCheckIn({
+    required String consultationId,
+    required Map<String, dynamic> responses,
+  }) async {
+    await _consultation(consultationId).update({
+      'followUpCheckIn': responses,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await sendSystemMessage(consultationId,
+        'Patient submitted their follow-up check-in.');
+  }
+
+  /// Get treatment plan for a consultation.
+  Future<TreatmentPlan?> getTreatmentPlan(String consultationId) async {
+    final snap = await _db
+        .collection('treatment_plans')
+        .where('consultationID', isEqualTo: consultationId)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return TreatmentPlan.fromDocument(snap.docs.first);
+  }
+
+  /// Stream treatment plan for a consultation.
+  Stream<TreatmentPlan?> streamTreatmentPlan(String consultationId) {
+    return _db
+        .collection('treatment_plans')
+        .where('consultationID', isEqualTo: consultationId)
+        .limit(1)
+        .snapshots()
+        .map((snap) {
+      if (snap.docs.isEmpty) return null;
+      return TreatmentPlan.fromDocument(snap.docs.first);
+    });
   }
 
   Future<void> scheduleFollowUp(String consultationId) async {

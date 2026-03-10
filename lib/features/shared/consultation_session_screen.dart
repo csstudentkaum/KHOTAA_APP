@@ -15,6 +15,10 @@ import '../../models/chat_message.dart';
 import '../../models/consultation.dart';
 import '../../services/firebase/consultation_chat_service.dart';
 import 'agora_video_call_screen.dart';
+import 'end_consultation_screen.dart';
+import 'treatment_plan_view.dart';
+import 'consultation_summary_view.dart';
+import 'follow_up_check_in_screen.dart';
 
 /// Shared consultation session screen used by both patient and doctor.
 /// Pass [isDoctor] = true when launched from the doctor shell.
@@ -282,14 +286,14 @@ class _ConsultationSessionScreenState
     if (mounted) setState(() => _callInProgress = false);
   }
 
-  void _showEndSessionDialog(Consultation consultation) {
-    showDialog(
-      context: context,
-      builder: (_) => _EndSessionDialog(
-        consultationId: widget.consultationId,
-        service: _service,
+  void _showEndSessionDialog(Consultation consultation) async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => EndConsultationScreen(consultation: consultation),
       ),
     );
+    // If saved successfully, scroll to bottom to see the system message
+    if (result == true && mounted) _scrollToBottom();
   }
 
   // ── Build ──
@@ -393,21 +397,30 @@ class _ConsultationSessionScreenState
                   !isReadOnly &&
                   !widget.isDoctor)
                 Container(
-                  color: AppColors.inputFill,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8EAED),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: AppColors.textSecondary.withValues(alpha: 0.3),
+                        width: 1.2,
+                      ),
+                    ),
+                  ),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                      horizontal: 16, vertical: 14),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(7),
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           color: AppColors.textSecondary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.videocam_rounded,
-                            color: AppColors.textSecondary, size: 18),
+                            color: AppColors.textSecondary, size: 20),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,16 +429,17 @@ class _ConsultationSessionScreenState
                               'Video session available',
                               style: TextStyle(
                                 color: AppColors.textPrimary,
-                                fontSize: 13,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 fontFamily: 'Poppins',
                               ),
                             ),
+                            SizedBox(height: 2),
                             Text(
                               'The doctor will start the video call when ready',
                               style: TextStyle(
                                 color: AppColors.textSecondary,
-                                fontSize: 11,
+                                fontSize: 12,
                                 fontFamily: 'Poppins',
                               ),
                             ),
@@ -479,6 +493,9 @@ class _ConsultationSessionScreenState
                           message: msg,
                           isMe: isMe,
                           isCallEnded: callEnded,
+                          isDoctor: widget.isDoctor,
+                          consultationId: widget.consultationId,
+                          consultation: consultation,
                           playingMessageId: _playingMessageId,
                           playingElapsedSeconds: _playingElapsedSeconds,
                           getSignedUrl: (url) => _service.getFileUrl(url),
@@ -531,6 +548,67 @@ class _ConsultationSessionScreenState
                   },
                 ),
               ),
+              // ── Patient: single priority-based pinned card ──
+              if (consultation != null &&
+                  consultation.status == 'followUp' &&
+                  !widget.isDoctor) ...[
+                if (consultation.isCheckInDue && !consultation.hasCheckIn)
+                  // Priority 1: Check-in due → gradient CTA
+                  _CheckInFloatingBar(
+                    onTap: () async {
+                      final result =
+                          await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => FollowUpCheckInScreen(
+                              consultation: consultation),
+                        ),
+                      );
+                      if (result == true && mounted) _scrollToBottom();
+                    },
+                  )
+                else if (consultation.hasCheckIn)
+                  // Priority 2: Check-in submitted → confirmation
+                  _SmartCard(
+                    icon: Icons.check_circle_rounded,
+                    color: AppColors.success,
+                    text: 'Check-in submitted — awaiting doctor review',
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => FollowUpCheckInScreen(
+                            consultation: consultation),
+                      ));
+                    },
+                  )
+                else if (consultation.treatmentPlanID != null)
+                  // Priority 3: Treatment plan ready
+                  _SmartCard(
+                    icon: Icons.medication_outlined,
+                    color: AppColors.primary,
+                    text: 'Treatment plan is ready — tap to view',
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => TreatmentPlanView(
+                            consultationId: widget.consultationId),
+                      ));
+                    },
+                  ),
+              ],
+              // ── Doctor: patient submitted check-in pinned card ──
+              if (consultation != null &&
+                  consultation.status == 'followUp' &&
+                  consultation.hasCheckIn &&
+                  widget.isDoctor)
+                _SmartCard(
+                  icon: Icons.assignment_turned_in_rounded,
+                  color: const Color(0xFFD97706),
+                  text: 'Patient submitted check-in — tap to review',
+                  onTap: () {
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => FollowUpCheckInScreen(
+                          consultation: consultation),
+                    ));
+                  },
+                ),
               if (!isReadOnly)
                 _InputBar(
                   controller: _textController,
@@ -543,7 +621,7 @@ class _ConsultationSessionScreenState
                   onToggleRecording: _toggleRecording,
                 ),
               if (isReadOnly)
-                const _ReadOnlyBanner(),
+                _ReadOnlyBanner(consultationId: widget.consultationId),
             ],
           ),
         );
@@ -614,6 +692,98 @@ class _ConsultationSessionScreenState
         ],
       ),
       actions: [
+        // ── Three-dot menu ──
+        if (consultation != null)
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+            offset: const Offset(0, 50),
+            onSelected: (value) {
+              switch (value) {
+                case 'treatment_plan':
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => TreatmentPlanView(
+                        consultationId: widget.consultationId),
+                  ));
+                  break;
+                case 'summary':
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => ConsultationSummaryView(
+                        consultationId: widget.consultationId),
+                  ));
+                  break;
+                case 'check_in':
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => FollowUpCheckInScreen(
+                        consultation: consultation),
+                  ));
+                  break;
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'treatment_plan',
+                child: Row(
+                  children: [
+                    Icon(Icons.medication_outlined,
+                        size: 20, color: AppColors.primary),
+                    SizedBox(width: 12),
+                    Text('Treatment Plan',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        )),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'summary',
+                child: Row(
+                  children: [
+                    Icon(Icons.medical_information_outlined,
+                        size: 20, color: AppColors.primary),
+                    SizedBox(width: 12),
+                    Text('Consultation Summary',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        )),
+                  ],
+                ),
+              ),
+              if (consultation.status == 'followUp' &&
+                  (!widget.isDoctor || consultation.hasCheckIn))
+                PopupMenuItem(
+                  value: 'check_in',
+                  child: Row(
+                    children: [
+                      Icon(
+                        widget.isDoctor
+                            ? Icons.assignment_turned_in_outlined
+                            : Icons.assignment_outlined,
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        widget.isDoctor
+                            ? 'Patient Responses'
+                            : 'Follow-up Check-in',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         // ── End Session (doctor only) ──
         if (widget.isDoctor && !isReadOnly)
           Padding(
@@ -633,7 +803,7 @@ class _ConsultationSessionScreenState
                     borderRadius: BorderRadius.circular(22)),
               ),
               child: const Text(
-                'End Session',
+                'Wrap Up',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 13,
@@ -706,22 +876,54 @@ class _EmptyChat extends StatelessWidget {
 // ────────────────────────────────────────────────────────────────────────────
 
 class _ReadOnlyBanner extends StatelessWidget {
-  const _ReadOnlyBanner();
+  final String consultationId;
+
+  const _ReadOnlyBanner({required this.consultationId});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       color: AppColors.divider,
-      child: const Text(
-        'Session completed — chat is read-only',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: AppColors.textSecondary,
-          fontSize: 13,
-          fontFamily: 'Poppins',
-        ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Session completed — chat is read-only',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) =>
+                    ConsultationSummaryView(consultationId: consultationId),
+              ));
+            },
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'View Summary',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -995,6 +1197,9 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
   final bool isCallEnded;
+  final bool isDoctor;
+  final String consultationId;
+  final Consultation? consultation;
   final String? playingMessageId;
   final int playingElapsedSeconds;
   final void Function(String msgId, String url) onPlayVoice;
@@ -1005,6 +1210,9 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     this.isCallEnded = false,
+    required this.isDoctor,
+    required this.consultationId,
+    this.consultation,
     required this.playingMessageId,
     required this.playingElapsedSeconds,
     required this.onPlayVoice,
@@ -1017,21 +1225,23 @@ class _MessageBubble extends StatelessWidget {
     // System messages — centered pill
     if (message.type == MessageType.system) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 32),
         child: Center(
           child: Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFE8EAED),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               message.text ?? '',
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
                 fontFamily: 'Poppins',
+                height: 1.4,
               ),
             ),
           ),
@@ -1645,210 +1855,145 @@ class _PdfViewerScreenState extends State<_PdfViewerScreen> {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-class _EndSessionDialog extends StatefulWidget {
-  final String consultationId;
-  final ConsultationChatService service;
-
-  const _EndSessionDialog({
-    required this.consultationId,
-    required this.service,
-  });
-
-  @override
-  State<_EndSessionDialog> createState() => _EndSessionDialogState();
-}
-
-class _EndSessionDialogState extends State<_EndSessionDialog> {
-  bool _isSaving = false;
-
-  Future<void> _complete() async {
-    setState(() => _isSaving = true);
-    await widget.service.completeSession(widget.consultationId);
-    if (mounted) Navigator.of(context).pop();
-  }
-
-  Future<void> _followUp() async {
-    setState(() => _isSaving = true);
-    await widget.service.scheduleFollowUp(widget.consultationId);
-    if (mounted) Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
-        child: _isSaving
-            ? const SizedBox(
-                height: 140,
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header icon + title
-                  Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.medical_services_rounded,
-                          color: AppColors.primary,
-                          size: 26,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'End Session',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins',
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'How would you like to close this consultation?',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textHint,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  _EndOptionTile(
-                    icon: Icons.check_circle_rounded,
-                    iconColor: AppColors.success,
-                    title: 'Complete Session',
-                    subtitle: 'Mark this consultation as finished',
-                    onTap: _complete,
-                  ),
-                  const SizedBox(height: 12),
-                  _EndOptionTile(
-                    icon: Icons.event_repeat_rounded,
-                    iconColor: AppColors.primary,
-                    title: 'Schedule Follow-up',
-                    subtitle: 'Request a follow-up appointment',
-                    onTap: _followUp,
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(
-                              color: AppColors.textHint.withValues(alpha: 0.3)),
-                        ),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: AppColors.textHint,
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-class _EndOptionTile extends StatelessWidget {
+/// Smart notification card shown above the input bar.
+class _SmartCard extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
+  final Color color;
+  final String text;
   final VoidCallback onTap;
 
-  const _EndOptionTile({
+  const _SmartCard({
     required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
+    required this.color,
+    required this.text,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.07),
+          color: const Color(0xFFF0F4F8),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: iconColor.withValues(alpha: 0.22)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
             Container(
-              width: 46,
-              height: 46,
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: color.withValues(alpha: 0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Floating check-in call-to-action bar for patients with follow-up due.
+class _CheckInFloatingBar extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _CheckInFloatingBar({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.primary, AppColors.primaryDark],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: iconColor, size: 26),
+              child: const Icon(Icons.assignment_outlined,
+                  color: Colors.white, size: 22),
             ),
-            const SizedBox(width: 16),
-            Expanded(
+            const SizedBox(width: 14),
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    'Check-in Required',
                     style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
                       fontFamily: 'Poppins',
-                      color: iconColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 2),
                   Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textHint,
+                    'Your doctor needs an update on your progress',
+                    style: TextStyle(
                       fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: Colors.white70,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded,
-                size: 15, color: iconColor.withValues(alpha: 0.5)),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Start',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
           ],
         ),
       ),

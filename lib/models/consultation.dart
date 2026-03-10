@@ -24,6 +24,11 @@ class Consultation {
   final String? notes;
   final String? diagnosis;
   final String? prescription;
+  // Follow-up fields
+  final DateTime? followUpDueDate;
+  final List<Map<String, dynamic>> followUpTasks;
+  final String? followUpInstructions;
+  final Map<String, dynamic>? followUpCheckIn; // patient responses
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -45,6 +50,10 @@ class Consultation {
     this.notes,
     this.diagnosis,
     this.prescription,
+    this.followUpDueDate,
+    this.followUpTasks = const [],
+    this.followUpInstructions,
+    this.followUpCheckIn,
     this.createdAt,
     this.updatedAt,
   });
@@ -77,6 +86,17 @@ class Consultation {
       notes: map['notes'] as String?,
       diagnosis: map['diagnosis'] as String?,
       prescription: map['prescription'] as String?,
+      followUpDueDate: map['followUpDueDate'] != null
+          ? (map['followUpDueDate'] as Timestamp).toDate()
+          : null,
+      followUpTasks: (map['followUpTasks'] as List<dynamic>?)
+              ?.map((t) => Map<String, dynamic>.from(t as Map))
+              .toList() ??
+          [],
+      followUpInstructions: map['followUpInstructions'] as String?,
+      followUpCheckIn: map['followUpCheckIn'] != null
+          ? Map<String, dynamic>.from(map['followUpCheckIn'] as Map)
+          : null,
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] as Timestamp).toDate()
           : null,
@@ -108,6 +128,12 @@ class Consultation {
       'notes': notes,
       'diagnosis': diagnosis,
       'prescription': prescription,
+      'followUpDueDate': followUpDueDate != null
+          ? Timestamp.fromDate(followUpDueDate!)
+          : null,
+      'followUpTasks': followUpTasks,
+      'followUpInstructions': followUpInstructions,
+      'followUpCheckIn': followUpCheckIn,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
@@ -209,6 +235,17 @@ class Consultation {
   /// Whether the session chat is open (active or followUp)
   bool get isChatOpen => status == 'active' || status == 'followUp';
 
+  /// Whether follow-up check-in is due for the patient
+  bool get isCheckInDue {
+    if (status != 'followUp' || followUpDueDate == null) return false;
+    final now = DateTime.now();
+    // Check-in becomes available 1 day before due date
+    return now.isAfter(followUpDueDate!.subtract(const Duration(days: 1)));
+  }
+
+  /// Whether patient has submitted their check-in
+  bool get hasCheckIn => followUpCheckIn != null && followUpCheckIn!.isNotEmpty;
+
   /// Whether the session is fully done
   bool get isCompleted => status == 'completed';
 
@@ -240,6 +277,10 @@ class Consultation {
     String? notes,
     String? diagnosis,
     String? prescription,
+    DateTime? followUpDueDate,
+    List<Map<String, dynamic>>? followUpTasks,
+    String? followUpInstructions,
+    Map<String, dynamic>? followUpCheckIn,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -258,6 +299,10 @@ class Consultation {
       status: status ?? this.status,
       timeSlot: timeSlot ?? this.timeSlot,
       channelName: channelName ?? this.channelName,
+      followUpDueDate: followUpDueDate ?? this.followUpDueDate,
+      followUpTasks: followUpTasks ?? this.followUpTasks,
+      followUpInstructions: followUpInstructions ?? this.followUpInstructions,
+      followUpCheckIn: followUpCheckIn ?? this.followUpCheckIn,
       notes: notes ?? this.notes,
       diagnosis: diagnosis ?? this.diagnosis,
       prescription: prescription ?? this.prescription,
