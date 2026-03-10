@@ -3,6 +3,14 @@ import '../../models/user_model.dart';
 import '../../models/patient_model.dart';
 import '../../models/doctor_model.dart';
 import '../../models/device_model.dart';
+import '../../models/alert.dart';
+import '../../models/sensor_reading.dart';
+import '../../models/medical_images.dart';
+import '../../models/image_analysis.dart';
+import '../../models/consultation.dart';
+import '../../models/treatment_plan.dart';
+import '../../models/weekly_report.dart';
+import '../../models/preventive_recommendation.dart';
 
 /// Firestore service for managing User, Patient, Doctor, and Device data.
 ///
@@ -31,6 +39,14 @@ class FirestoreService {
   // ==================== Collection References ====================
   CollectionReference get _usersCollection => _db.collection('users');
   CollectionReference get _devicesCollection => _db.collection('devices');
+  CollectionReference get _alertsCollection => _db.collection('alerts');
+  CollectionReference get _sensorReadingsCollection => _db.collection('sensor_readings');
+  CollectionReference get _medicalImagesCollection => _db.collection('medical_images');
+  CollectionReference get _imageAnalysisCollection => _db.collection('image_analysis');
+  CollectionReference get _consultationsCollection => _db.collection('consultations');
+  CollectionReference get _treatmentPlansCollection => _db.collection('treatment_plans');
+  CollectionReference get _weeklyReportsCollection => _db.collection('weekly_reports');
+  CollectionReference get _preventiveRecommendationsCollection => _db.collection('preventive_recommendations');
 
   // ==================== USER OPERATIONS ====================
 
@@ -252,5 +268,330 @@ class FirestoreService {
 
     // Delete the user document
     await _usersCollection.doc(userId).delete();
+  }
+
+  // ==================== ALERT OPERATIONS ====================
+
+  /// Create a new alert
+  Future<void> createAlert(Alert alert) async {
+    await _alertsCollection.doc(alert.alertID).set(alert.toFirestore());
+  }
+
+  /// Get an alert by ID
+  Future<Alert?> getAlert(String alertId) async {
+    final doc = await _alertsCollection.doc(alertId).get();
+    if (!doc.exists) return null;
+    return Alert.fromFirestore(doc);
+  }
+
+  /// Get all alerts for a patient
+  Future<List<Alert>> getAlertsForPatient(String patientId) async {
+    final snapshot = await _alertsCollection
+        .where('patientId', isEqualTo: patientId)
+        .orderBy('raisedAt', descending: true)
+        .get();
+    return snapshot.docs.map((doc) => Alert.fromFirestore(doc)).toList();
+  }
+
+  /// Get unviewed alerts for a patient
+  Future<List<Alert>> getUnviewedAlertsForPatient(String patientId) async {
+    final snapshot = await _alertsCollection
+        .where('patientId', isEqualTo: patientId)
+        .where('viewed', isEqualTo: false)
+        .get();
+    return snapshot.docs.map((doc) => Alert.fromFirestore(doc)).toList();
+  }
+
+  /// Mark alert as viewed
+  Future<void> markAlertAsViewed(String alertId) async {
+    await _alertsCollection.doc(alertId).update({'viewed': true});
+  }
+
+  /// Stream alerts for a patient
+  Stream<List<Alert>> streamAlertsForPatient(String patientId) {
+    return _alertsCollection
+        .where('patientId', isEqualTo: patientId)
+        .orderBy('raisedAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => Alert.fromFirestore(doc)).toList());
+  }
+
+  // ==================== SENSOR READING OPERATIONS ====================
+
+  /// Create a new sensor reading
+  Future<void> createSensorReading(SensorReading reading) async {
+    await _sensorReadingsCollection
+        .doc(reading.sensorReadingID)
+        .set(reading.toFirestore());
+  }
+
+  /// Get sensor readings for a patient
+  Future<List<SensorReading>> getSensorReadingsForPatient(
+      String patientId) async {
+    final snapshot = await _sensorReadingsCollection
+        .where('patientId', isEqualTo: patientId)
+        .orderBy('timestamp', descending: true)
+        .get();
+    return snapshot.docs.map((doc) => SensorReading.fromFirestore(doc)).toList();
+  }
+
+  /// Get sensor readings for a device
+  Future<List<SensorReading>> getSensorReadingsForDevice(
+      String deviceId) async {
+    final snapshot = await _sensorReadingsCollection
+        .where('deviceId', isEqualTo: deviceId)
+        .orderBy('timestamp', descending: true)
+        .get();
+    return snapshot.docs.map((doc) => SensorReading.fromFirestore(doc)).toList();
+  }
+
+  /// Stream sensor readings for a patient
+  Stream<List<SensorReading>> streamSensorReadingsForPatient(String patientId) {
+    return _sensorReadingsCollection
+        .where('patientId', isEqualTo: patientId)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => SensorReading.fromFirestore(doc)).toList());
+  }
+
+  // ==================== MEDICAL IMAGES OPERATIONS ====================
+
+  /// Upload a medical image record
+  Future<void> createMedicalImage(MedicalImages image) async {
+    await _medicalImagesCollection.doc(image.imageID).set(image.toFirestore());
+  }
+
+  /// Get a medical image by ID
+  Future<MedicalImages?> getMedicalImage(String imageId) async {
+    final doc = await _medicalImagesCollection.doc(imageId).get();
+    if (!doc.exists) return null;
+    return MedicalImages.fromFirestore(doc);
+  }
+
+  /// Get all medical images for a patient
+  Future<List<MedicalImages>> getMedicalImagesForPatient(
+      String patientId) async {
+    final snapshot = await _medicalImagesCollection
+        .where('patientId', isEqualTo: patientId)
+        .orderBy('uploadedAt', descending: true)
+        .get();
+    return snapshot.docs.map((doc) => MedicalImages.fromFirestore(doc)).toList();
+  }
+
+  /// Stream medical images for a patient
+  Stream<List<MedicalImages>> streamMedicalImagesForPatient(String patientId) {
+    return _medicalImagesCollection
+        .where('patientId', isEqualTo: patientId)
+        .orderBy('uploadedAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => MedicalImages.fromFirestore(doc)).toList());
+  }
+
+  // ==================== IMAGE ANALYSIS OPERATIONS ====================
+
+  /// Create an image analysis
+  Future<void> createImageAnalysis(ImageAnalysis analysis) async {
+    await _imageAnalysisCollection
+        .doc(analysis.analysisID)
+        .set(analysis.toFirestore());
+  }
+
+  /// Get analysis for a specific image
+  Future<ImageAnalysis?> getAnalysisForImage(String imageId) async {
+    final snapshot = await _imageAnalysisCollection
+        .where('imageId', isEqualTo: imageId)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isEmpty) return null;
+    return ImageAnalysis.fromFirestore(snapshot.docs.first);
+  }
+
+  /// Get all analyses for a patient
+  Future<List<ImageAnalysis>> getAnalysesForPatient(String patientId) async {
+    final snapshot = await _imageAnalysisCollection
+        .where('patientId', isEqualTo: patientId)
+        .get();
+    return snapshot.docs.map((doc) => ImageAnalysis.fromFirestore(doc)).toList();
+  }
+
+  // ==================== CONSULTATION OPERATIONS ====================
+
+  /// Create a consultation
+  Future<void> createConsultation(Consultation consultation) async {
+    await _consultationsCollection
+        .doc(consultation.consultationID)
+        .set(consultation.toMap());
+  }
+
+  /// Get a consultation by ID
+  Future<Consultation?> getConsultation(String consultationId) async {
+    final doc = await _consultationsCollection.doc(consultationId).get();
+    if (!doc.exists) return null;
+    return Consultation.fromDocument(doc);
+  }
+
+  /// Get consultations for a patient
+  Future<List<Consultation>> getConsultationsForPatient(
+      String patientId) async {
+    final snapshot = await _consultationsCollection
+        .where('patientID', isEqualTo: patientId)
+        .orderBy('consultationDate', descending: true)
+        .get();
+    return snapshot.docs.map((doc) => Consultation.fromDocument(doc)).toList();
+  }
+
+  /// Get consultations for a doctor
+  Future<List<Consultation>> getConsultationsForDoctor(String doctorId) async {
+    final snapshot = await _consultationsCollection
+        .where('doctorID', isEqualTo: doctorId)
+        .orderBy('consultationDate', descending: true)
+        .get();
+    return snapshot.docs.map((doc) => Consultation.fromDocument(doc)).toList();
+  }
+
+  /// Update a consultation
+  Future<void> updateConsultation(
+      String consultationId, Map<String, dynamic> data) async {
+    await _consultationsCollection.doc(consultationId).update(data);
+  }
+
+  /// Stream consultations for a patient
+  Stream<List<Consultation>> streamConsultationsForPatient(String patientId) {
+    return _consultationsCollection
+        .where('patientID', isEqualTo: patientId)
+        .orderBy('consultationDate', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => Consultation.fromDocument(doc)).toList());
+  }
+
+  // ==================== TREATMENT PLAN OPERATIONS ====================
+
+  /// Create a treatment plan
+  Future<void> createTreatmentPlan(TreatmentPlan plan) async {
+    await _treatmentPlansCollection.doc(plan.treatmentPlanID).set(plan.toMap());
+  }
+
+  /// Get a treatment plan by ID
+  Future<TreatmentPlan?> getTreatmentPlan(String planId) async {
+    final doc = await _treatmentPlansCollection.doc(planId).get();
+    if (!doc.exists) return null;
+    return TreatmentPlan.fromDocument(doc);
+  }
+
+  /// Get treatment plan for a consultation
+  Future<TreatmentPlan?> getTreatmentPlanForConsultation(
+      String consultationId) async {
+    final snapshot = await _treatmentPlansCollection
+        .where('consultationID', isEqualTo: consultationId)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isEmpty) return null;
+    return TreatmentPlan.fromDocument(snapshot.docs.first);
+  }
+
+  /// Update a treatment plan
+  Future<void> updateTreatmentPlan(
+      String planId, Map<String, dynamic> data) async {
+    data['lastUpdated'] = FieldValue.serverTimestamp();
+    await _treatmentPlansCollection.doc(planId).update(data);
+  }
+
+  // ==================== WEEKLY REPORT OPERATIONS ====================
+
+  /// Create a weekly report
+  Future<void> createWeeklyReport(WeeklyReport report) async {
+    await _weeklyReportsCollection.doc(report.reportID).set(report.toMap());
+  }
+
+  /// Get a weekly report by ID
+  Future<WeeklyReport?> getWeeklyReport(String reportId) async {
+    final doc = await _weeklyReportsCollection.doc(reportId).get();
+    if (!doc.exists) return null;
+    return WeeklyReport.fromDocument(doc);
+  }
+
+  /// Get weekly reports for a patient
+  Future<List<WeeklyReport>> getWeeklyReportsForPatient(
+      String patientId) async {
+    final snapshot = await _weeklyReportsCollection
+        .where('patientID', isEqualTo: patientId)
+        .orderBy('weekStart', descending: true)
+        .get();
+    return snapshot.docs.map((doc) => WeeklyReport.fromDocument(doc)).toList();
+  }
+
+  /// Stream weekly reports for a patient
+  Stream<List<WeeklyReport>> streamWeeklyReportsForPatient(String patientId) {
+    return _weeklyReportsCollection
+        .where('patientID', isEqualTo: patientId)
+        .orderBy('weekStart', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => WeeklyReport.fromDocument(doc)).toList());
+  }
+
+  // ==================== PREVENTIVE RECOMMENDATION OPERATIONS ====================
+
+  /// Create a preventive recommendation
+  Future<void> createPreventiveRecommendation(
+      PreventiveRecommendation recommendation) async {
+    await _preventiveRecommendationsCollection
+        .doc(recommendation.recID)
+        .set(recommendation.toMap());
+  }
+
+  /// Get a preventive recommendation by ID
+  Future<PreventiveRecommendation?> getPreventiveRecommendation(
+      String recId) async {
+    final doc = await _preventiveRecommendationsCollection.doc(recId).get();
+    if (!doc.exists) return null;
+    return PreventiveRecommendation.fromDocument(doc);
+  }
+
+  /// Get preventive recommendations for a patient
+  Future<List<PreventiveRecommendation>> getPreventiveRecommendationsForPatient(
+      String patientId) async {
+    final snapshot = await _preventiveRecommendationsCollection
+        .where('patientID', isEqualTo: patientId)
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snapshot.docs
+        .map((doc) => PreventiveRecommendation.fromDocument(doc))
+        .toList();
+  }
+
+  /// Get unviewed recommendations for a patient
+  Future<List<PreventiveRecommendation>>
+      getUnviewedRecommendationsForPatient(String patientId) async {
+    final snapshot = await _preventiveRecommendationsCollection
+        .where('patientID', isEqualTo: patientId)
+        .where('viewed', isEqualTo: false)
+        .get();
+    return snapshot.docs
+        .map((doc) => PreventiveRecommendation.fromDocument(doc))
+        .toList();
+  }
+
+  /// Mark recommendation as viewed
+  Future<void> markRecommendationAsViewed(String recId) async {
+    await _preventiveRecommendationsCollection
+        .doc(recId)
+        .update({'viewed': true});
+  }
+
+  /// Stream recommendations for a patient
+  Stream<List<PreventiveRecommendation>>
+      streamPreventiveRecommendationsForPatient(String patientId) {
+    return _preventiveRecommendationsCollection
+        .where('patientID', isEqualTo: patientId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => PreventiveRecommendation.fromDocument(doc))
+            .toList());
   }
 }

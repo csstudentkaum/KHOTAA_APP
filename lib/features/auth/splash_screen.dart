@@ -104,19 +104,11 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Heart/stethoscope icon matching Figma
-                Container(
+                // KHOTAA logo
+                Image.asset(
+                  'assets/images/khotaa_logo_white.png',
                   width: 120,
                   height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(25),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.favorite,
-                    size: 64,
-                    color: Colors.white,
-                  ),
                 ),
                 const SizedBox(height: 24),
                 // KHOTAA text

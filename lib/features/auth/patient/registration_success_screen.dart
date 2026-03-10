@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/app_theme.dart';
+import '../../../app/app_theme.dart';
 
 /// Congratulations screen shown after successful registration.
 /// Matches the Figma "Congratulations — Your account has been created" design.

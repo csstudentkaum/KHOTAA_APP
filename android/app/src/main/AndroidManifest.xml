@@ -3,14 +3,11 @@
     <uses-permission android:name="android.permission.CALL_PHONE"/>
     
     <!-- Bluetooth permissions for Smart Insole connection -->
-    <!-- Required for Android 12 (API 31) and above -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
-    
-    <!-- Required for Android 11 (API 30) and below -->
-    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
     
     <!-- Location permission required for BLE scanning on older Android versions -->
@@ -19,6 +16,21 @@
     
     <!-- Declare that app uses Bluetooth Low Energy -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
+
+    <!-- Microphone for voice messages -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Camera for taking wound photos -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Storage for reading/sending files and images -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+    <!-- Agora RTC — video call -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     
     <!-- Required for url_launcher to query phone app -->
     <queries>
@@ -69,6 +81,14 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
         </intent>
     </queries>
 </manifest>

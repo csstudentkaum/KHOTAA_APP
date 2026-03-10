@@ -1,35 +1,33 @@
 import 'package:flutter/material.dart';
-import '../../app/app_theme.dart';
-import '../../services/firebase/auth_service.dart';
+import '../../../app/app_theme.dart';
+import '../../../services/firebase/auth_service.dart';
+import '../../../shared/formatters/phone_formatter.dart';
 
-/// Login screen — Phone number → OTP verification (passwordless).
+/// Patient Login screen — Phone number → OTP verification (passwordless).
 ///
 /// Flow:
-///   1. User enters phone number
+///   1. Patient enters phone number
 ///   2. Phone is checked against Firestore (must be registered)
 ///   3. OTP is sent to the phone number
 ///   4. Navigates to OTP screen for verification
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class PatientLoginScreen extends StatefulWidget {
+  const PatientLoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<PatientLoginScreen> createState() => _PatientLoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _PatientLoginScreenState extends State<PatientLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
-  // [PASSWORD_FEATURE] final _passwordController = TextEditingController();
   final _authService = AuthService();
 
   bool _isLoading = false;
-  // [PASSWORD_FEATURE] bool _obscurePassword = true;
   String? _errorMessage;
 
   @override
   void dispose() {
     _phoneController.dispose();
-    // [PASSWORD_FEATURE] _passwordController.dispose();
     super.dispose();
   }
 
@@ -42,8 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // Step 1: Check if phone is registered in Firestore
-      final phone = _phoneController.text.trim();
+      final localNumber = _phoneController.text.trim().replaceAll(RegExp(r'\s'), '');
+      final phone = '+966$localNumber';
 
       if (phone.isEmpty) {
         setState(() {
@@ -53,15 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final userData = await _authService.findUserByPhone(
-        phone: phone,
-      );
-
-      // [PASSWORD_FEATURE] Uncomment below to re-enable password verification:
-      // final userData = await _authService.verifyPasswordForLogin(
-      //   phone: phone,
-      //   password: _passwordController.text,
-      // );
+      final userData = await _authService.findUserByPhone(phone: phone);
 
       if (userData == null) {
         setState(() {
@@ -71,19 +61,26 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      // Check role - this is patient login
+      if (userData['role'] == 'doctor') {
+        setState(() {
+          _errorMessage = 'Please use the Doctor Portal to sign in.';
+          _isLoading = false;
+        });
+        return;
+      }
+
       if (!mounted) return;
 
-      // Step 2: Send OTP to the phone number
       await _authService.sendOTP(
         phoneNumber: phone,
         onCodeSent: (verificationId, resendToken) {
           if (!mounted) return;
           setState(() => _isLoading = false);
 
-          // Navigate to OTP screen
           Navigator.pushNamed(
             context,
-            '/otp',
+            '/patient/otp',
             arguments: {
               'verificationId': verificationId,
               'phoneNumber': phone,
@@ -158,11 +155,34 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        hintText: '+966 5XX XXX XXXX',
-                        prefixIcon:
-                            Icon(Icons.phone_outlined, color: AppColors.primary),
+                      inputFormatters: [SaudiPhoneFormatter()],
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _handleLogin(),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '5X XXX XXXX',
+                        prefixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const SizedBox(width: 16),
+                            const Text('\u{1F1F8}\u{1F1E6}', style: TextStyle(fontSize: 16, height: 1)),
+                            const SizedBox(width: 8),
+                            Text('+966 ',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w400,
+                                  color: AppColors.textPrimary,
+                                  height: 1,
+                                )),
+                          ],
+                        ),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -170,41 +190,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
                         final cleaned =
                             value.trim().replaceAll(RegExp(r'\s'), '');
-                        if (!RegExp(r'^\+[1-9]\d{6,14}$').hasMatch(cleaned)) {
-                          return 'Enter valid number with country code (e.g. +966...)';
+                        if (!RegExp(r'^5\d{8}$').hasMatch(cleaned)) {
+                          return 'Enter a valid Saudi number (e.g. 5XXXXXXXX)';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 28),
-
-                    // [PASSWORD_FEATURE] Password field — uncomment to re-enable.
-                    // _buildLabel('Password'),
-                    // const SizedBox(height: 8),
-                    // TextFormField(
-                    //   controller: _passwordController,
-                    //   obscureText: _obscurePassword,
-                    //   textInputAction: TextInputAction.done,
-                    //   onFieldSubmitted: (_) => _handleLogin(),
-                    //   decoration: InputDecoration(
-                    //     hintText: 'Enter your password',
-                    //     prefixIcon: const Icon(Icons.lock_outline,
-                    //         color: AppColors.primary),
-                    //     suffixIcon: IconButton(
-                    //       icon: Icon(
-                    //         _obscurePassword
-                    //             ? Icons.visibility_off_outlined
-                    //             : Icons.visibility_outlined,
-                    //         color: AppColors.textHint,
-                    //       ),
-                    //       onPressed: () => setState(
-                    //           () => _obscurePassword = !_obscurePassword),
-                    //     ),
-                    //   ),
-                    //   validator: (v) =>
-                    //       v == null || v.isEmpty ? 'Please enter your password' : null,
-                    // ),
-                    // const SizedBox(height: 28),
 
                     // Sign In button
                     SizedBox(
@@ -233,7 +225,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: AppColors.textSecondary, fontSize: 14)),
                         GestureDetector(
                           onTap: () => Navigator.pushReplacementNamed(
-                              context, '/register'),
+                              context, '/patient/register'),
                           child: const Text(
                             'Sign Up',
                             style: TextStyle(
@@ -244,6 +236,46 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Divider
+                    Row(
+                      children: [
+                        Expanded(
+                            child: Divider(
+                                color: AppColors.divider, thickness: 1)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('OR',
+                              style: TextStyle(
+                                  color: AppColors.textHint, fontSize: 12)),
+                        ),
+                        Expanded(
+                            child: Divider(
+                                color: AppColors.divider, thickness: 1)),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Doctor sign in
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            Navigator.pushNamed(context, '/doctor/login'),
+                        icon:
+                            const Icon(Icons.medical_services_outlined, size: 20),
+                        label: const Text('Sign in as Doctor'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -273,14 +305,10 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
+              Image.asset(
+                'assets/images/khotaa_logo_white.png',
                 width: 80,
                 height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(30),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.favorite, size: 44, color: Colors.white),
               ),
               const SizedBox(height: 12),
               const Text(

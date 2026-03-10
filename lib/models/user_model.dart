@@ -7,12 +7,14 @@ class UserModel {
   final String id;
   final String firstName;
   final String lastName;
+  final String? email; // For doctor email/password auth
   final DateTime? dateOfBirth;
   final int? age;
   final String? gender;
   final String phone;
   // [PASSWORD_FEATURE] final String? password; // Uncomment to re-enable password support
   final String role; // 'doctor' or 'patient'
+  final bool isActive; // For doctor activation status
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -20,12 +22,14 @@ class UserModel {
     required this.id,
     required this.firstName,
     required this.lastName,
+    this.email,
     this.dateOfBirth,
     this.age,
     this.gender,
     required this.phone,
     // [PASSWORD_FEATURE] this.password,
     required this.role,
+    this.isActive = true,
     this.createdAt,
     this.updatedAt,
   });
@@ -37,6 +41,7 @@ class UserModel {
       id: doc.id,
       firstName: data['firstName'] ?? '',
       lastName: data['lastName'] ?? '',
+      email: data['email'],
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
@@ -45,6 +50,7 @@ class UserModel {
       phone: data['phone'] ?? '',
       // [PASSWORD_FEATURE] password: data['password'],
       role: data['role'] ?? '',
+      isActive: data['isActive'] ?? true,
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -60,6 +66,7 @@ class UserModel {
       id: id,
       firstName: data['firstName'] ?? '',
       lastName: data['lastName'] ?? '',
+      email: data['email'],
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
@@ -68,6 +75,7 @@ class UserModel {
       phone: data['phone'] ?? '',
       // [PASSWORD_FEATURE] password: data['password'],
       role: data['role'] ?? '',
+      isActive: data['isActive'] ?? true,
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -82,12 +90,14 @@ class UserModel {
     return {
       'firstName': firstName,
       'lastName': lastName,
+      'email': email,
       'dateOfBirth':
           dateOfBirth != null ? Timestamp.fromDate(dateOfBirth!) : null,
       'age': age,
       'gender': gender,
       'phone': phone,
       'role': role,
+      'isActive': isActive,
       'createdAt':
           createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -102,12 +112,14 @@ class UserModel {
     String? id,
     String? firstName,
     String? lastName,
+    String? email,
     DateTime? dateOfBirth,
     int? age,
     String? gender,
     String? phone,
     // [PASSWORD_FEATURE] String? password,
     String? role,
+    bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -115,12 +127,14 @@ class UserModel {
       id: id ?? this.id,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       age: age ?? this.age,
       gender: gender ?? this.gender,
       phone: phone ?? this.phone,
       // [PASSWORD_FEATURE] password: password ?? this.password,
       role: role ?? this.role,
+      isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
