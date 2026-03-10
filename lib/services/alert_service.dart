@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../models/smart_alert.dart';
+import '../models/smart_alert.dart';
 
 /// Service for managing smart alerts across the app
 /// Handles alert creation, storage, and notification triggers
@@ -18,8 +18,10 @@ class AlertService extends ChangeNotifier {
   final List<SmartAlert> _alerts = [];
   List<SmartAlert> get alerts => List.unmodifiable(_alerts);
   
-  // Unread count
-  int get unreadCount => _alerts.where((a) => !a.isViewed).length;
+  // Unread count - Only count health alerts (matching Smart Insole notifications)
+  int get unreadCount => _alerts
+      .where((a) => !a.isViewed && a.notificationType == NotificationType.health)
+      .length;
   
   // Stream controller for new alerts
   final StreamController<SmartAlert> _newAlertController = 
@@ -33,12 +35,33 @@ class AlertService extends ChangeNotifier {
 
   // Current patient ID
   String? _currentPatientId;
+  
+  // Flag to use sample data only (no Firestore)
+  bool _useSampleDataOnly = false;
+  
+  // Firestore subscription
+  StreamSubscription? _firestoreSubscription;
 
   /// Initialize the service for a patient
   Future<void> initialize(String patientId) async {
     _currentPatientId = patientId;
+    await _clearOldCacheIfNeeded();
     await _loadLocalAlerts();
     _listenToFirestoreAlerts();
+  }
+
+  /// Clear old cache when version changes (to fix corrupted data)
+  Future<void> _clearOldCacheIfNeeded() async {
+    const currentVersion = 3; // Increment this when changing alert structure
+    final prefs = await SharedPreferences.getInstance();
+    final savedVersion = prefs.getInt('alerts_cache_version_$_currentPatientId') ?? 0;
+    
+    if (savedVersion < currentVersion) {
+      // Clear old cache completely
+      await prefs.remove('smart_alerts_$_currentPatientId');
+      await prefs.setInt('alerts_cache_version_$_currentPatientId', currentVersion);
+      debugPrint('Cleared old alerts cache (version $savedVersion -> $currentVersion)');
+    }
   }
 
   /// Load alerts from local storage
@@ -73,22 +96,35 @@ class AlertService extends ChangeNotifier {
   void _listenToFirestoreAlerts() {
     if (_currentPatientId == null) return;
 
-    _firestore
-        .collection('alerts')
-        .where('patientId', isEqualTo: _currentPatientId)
-        .orderBy('timestamp', descending: true)
-        .limit(50)
-        .snapshots()
-        .listen((snapshot) {
-      for (var change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final alert = SmartAlert.fromFirestore(change.doc);
-          if (!_alerts.any((a) => a.id == alert.id)) {
-            _addAlert(alert);
+    try {
+      _firestoreSubscription = _firestore
+          .collection('alerts')
+          .where('patientId', isEqualTo: _currentPatientId)
+          .orderBy('timestamp', descending: true)
+          .limit(50)
+          .snapshots()
+          .listen(
+        (snapshot) {
+          // Skip if using sample data only
+          if (_useSampleDataOnly) return;
+          
+          for (var change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final alert = SmartAlert.fromFirestore(change.doc);
+              if (!_alerts.any((a) => a.id == alert.id)) {
+                _addAlert(alert);
+              }
+            }
           }
-        }
-      }
-    });
+        },
+        onError: (error) {
+          // Handle Firestore errors gracefully (e.g., missing index)
+          debugPrint('Firestore listener error: $error');
+        },
+      );
+    } catch (e) {
+      debugPrint('Error setting up Firestore listener: $e');
+    }
   }
 
   /// Add a new alert
@@ -178,10 +214,13 @@ class AlertService extends ChangeNotifier {
 
   /// Mark an alert as viewed
   Future<void> markAsViewed(String alertId) async {
+    debugPrint('AlertService: markAsViewed called for alert: $alertId');
     final index = _alerts.indexWhere((a) => a.id == alertId);
+    debugPrint('AlertService: Found alert at index: $index');
     if (index != -1) {
       _alerts[index] = _alerts[index].copyWith(isViewed: true);
       _saveLocalAlerts();
+      debugPrint('AlertService: Alert marked as viewed, calling notifyListeners. Unread count now: $unreadCount');
       notifyListeners();
 
       // Update Firestore
@@ -252,17 +291,30 @@ class AlertService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Add sample alerts for testing/demo
+  /// Add sample alerts for testing/demo (only once, preserves viewed state)
   Future<void> addSampleAlerts() async {
     if (_currentPatientId == null) return;
 
+    // Enable sample data mode - ignore Firestore updates
+    _useSampleDataOnly = true;
+    
+    // Check if sample alerts were already added (don't reset if they exist)
+    final hasExistingSamples = _alerts.any((a) => a.id.startsWith('sample_'));
+    if (hasExistingSamples) {
+      debugPrint('AlertService: Sample alerts already exist, skipping (preserving viewed state)');
+      return;
+    }
+
+    // Define sample alerts with proper notificationType
+    // 2 unread health alerts, 1 read health alert
+    // 2 read appointment alerts
     final samples = [
       SmartAlert(
-        id: '${DateTime.now().millisecondsSinceEpoch}1',
+        id: 'sample_health_pressure_001',
         title: 'High Pressure Alert',
         shortDescription: 'Excessive pressure on left foot heel',
         detailedExplanation: 
-            'Your smart insole has detected high pressure (265 units) on your left foot '
+            'Your smart insole has detected high pressure (265 kPa) on your left foot '
             'in the heel region.\n\n'
             'Prolonged high pressure can lead to tissue damage and increase the risk '
             'of diabetic foot ulcers. Taking a break and adjusting your footwear is recommended.',
@@ -270,75 +322,70 @@ class AlertService extends ChangeNotifier {
         category: RiskCategory.pressure,
         timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
         patientId: _currentPatientId!,
+        notificationType: NotificationType.health,
         recommendationTitle: 'Reduce Standing Time',
         recommendationDescription: 'Rest your feet for 15-20 minutes',
         instructions: 'Sit down and elevate your feet above heart level. This helps reduce swelling and pressure.',
       ),
       SmartAlert(
-        id: '${DateTime.now().millisecondsSinceEpoch}2',
+        id: 'sample_health_temp_001',
         title: 'Temperature Alert',
-        shortDescription: 'Elevated temperature on right foot',
+        shortDescription: 'Elevated temperature difference detected',
         detailedExplanation: 
-            'Your smart insole has detected elevated temperature (38.2°C) in your right foot.\n\n'
-            'Elevated temperature can indicate inflammation or infection. '
+            'Your smart insole has detected a temperature difference of 3.1°C between feet.\n\n'
+            'Temperature asymmetry >2.2°C can indicate inflammation or early ulcer risk. '
             'Applying a cool compress and monitoring is recommended.',
         riskLevel: RiskLevel.high,
         category: RiskCategory.temperature,
         timestamp: DateTime.now().subtract(const Duration(hours: 1)),
         patientId: _currentPatientId!,
+        notificationType: NotificationType.health,
         isViewed: true,
         recommendationTitle: 'Cool Down Your Feet',
         recommendationDescription: 'Apply cool compress for 10-15 minutes',
         instructions: 'Use a cool (not cold) compress on your foot. Avoid ice directly on skin. Monitor for changes.',
       ),
       SmartAlert(
-        id: '${DateTime.now().millisecondsSinceEpoch}3',
-        title: 'Movement Pattern Change',
-        shortDescription: 'Unusual gait pattern detected',
-        detailedExplanation: 
-            'Your smart insole has detected changes in your walking pattern.\n\n'
-            'This could indicate discomfort, fatigue, or compensation for pain. '
-            'Gentle stretching exercises are recommended.',
-        riskLevel: RiskLevel.medium,
-        category: RiskCategory.movement,
-        timestamp: DateTime.now().subtract(const Duration(hours: 3)),
-        patientId: _currentPatientId!,
-        recommendationTitle: 'Gentle Stretching',
-        recommendationDescription: 'Try ankle rotation exercises',
-        instructions: 'Rotate your ankles clockwise 10 times, then counterclockwise 10 times. Repeat 3 sets.',
-      ),
-      SmartAlert(
-        id: '${DateTime.now().millisecondsSinceEpoch}4',
+        id: 'sample_health_pressure_002',
         title: 'Pressure Distribution Notice',
         shortDescription: 'Uneven pressure distribution detected',
         detailedExplanation: 
-            'Your smart insole has detected uneven pressure distribution across your feet.\n\n'
+            'Your smart insole has detected pressure above baseline (195 kPa) on metatarsal region.\n\n'
             'This may be due to shoe wear or walking habits. Consider checking your footwear.',
         riskLevel: RiskLevel.medium,
         category: RiskCategory.pressure,
-        timestamp: DateTime.now().subtract(const Duration(days: 1)),
+        timestamp: DateTime.now().subtract(const Duration(hours: 3)),
         patientId: _currentPatientId!,
-        isViewed: true,
+        notificationType: NotificationType.health,
         recommendationTitle: 'Check Footwear',
         recommendationDescription: 'Inspect shoes for uneven wear',
         instructions: 'Inspect your shoes for wear. Consider diabetic-friendly footwear with proper cushioning.',
       ),
       SmartAlert(
-        id: '${DateTime.now().millisecondsSinceEpoch}5',
-        title: 'Daily Foot Care Reminder',
-        shortDescription: 'Time for your daily foot inspection',
+        id: 'sample_appt_001',
+        title: 'Dr. Abdullah Appointment',
+        shortDescription: 'Upcoming checkup on Tuesday at 09:30 AM',
         detailedExplanation: 
-            'Regular daily foot inspections are essential for diabetic foot health.\n\n'
-            'Check for cuts, blisters, redness, or swelling. Keep feet clean and moisturized.',
+            'You have an appointment scheduled with Dr. Abdullah for your regular foot checkup.',
+        riskLevel: RiskLevel.low,
+        category: RiskCategory.general,
+        timestamp: DateTime.now().subtract(const Duration(days: 1)),
+        patientId: _currentPatientId!,
+        notificationType: NotificationType.appointment,
+        isViewed: true,
+      ),
+      SmartAlert(
+        id: 'sample_appt_002',
+        title: 'Follow-up Reminder',
+        shortDescription: 'Schedule your monthly follow-up',
+        detailedExplanation: 
+            'Its been 4 weeks since your last checkup. Please schedule your monthly follow-up appointment.',
         riskLevel: RiskLevel.low,
         category: RiskCategory.general,
         timestamp: DateTime.now().subtract(const Duration(days: 2)),
         patientId: _currentPatientId!,
+        notificationType: NotificationType.appointment,
         isViewed: true,
-        isResolved: true,
-        recommendationTitle: 'Daily Inspection',
-        recommendationDescription: 'Review your feet for any changes',
-        instructions: 'Examine all areas of your feet including between toes. Use a mirror for hard-to-see areas.',
       ),
     ];
 
@@ -370,6 +417,7 @@ class AlertService extends ChangeNotifier {
       'recommendationTitle': alert.recommendationTitle,
       'recommendationDescription': alert.recommendationDescription,
       'instructions': alert.instructions,
+      'notificationType': alert.notificationType.name,
     };
   }
 
@@ -399,11 +447,18 @@ class AlertService extends ChangeNotifier {
       recommendationTitle: json['recommendationTitle'],
       recommendationDescription: json['recommendationDescription'],
       instructions: json['instructions'],
+      notificationType: json['notificationType'] != null
+          ? NotificationType.values.firstWhere(
+              (e) => e.name == json['notificationType'],
+              orElse: () => NotificationType.health,
+            )
+          : NotificationType.health,
     );
   }
 
   @override
   void dispose() {
+    _firestoreSubscription?.cancel();
     _newAlertController.close();
     _bellAnimationController.close();
     super.dispose();

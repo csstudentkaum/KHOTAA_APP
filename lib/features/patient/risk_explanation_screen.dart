@@ -202,6 +202,7 @@ class _RiskExplanationScreenState extends State<RiskExplanationScreen>
     );
   }
 
+  // Simplified header - shows category icon (no risk level)
   Widget _buildRiskLevelHeader() {
     return AnimatedBuilder(
       animation: _iconAnimationController,
@@ -212,40 +213,40 @@ class _RiskExplanationScreenState extends State<RiskExplanationScreen>
             angle: _iconRotateAnimation.value,
             child: Column(
               children: [
-                // Risk Level Icon Container
+                // Category Icon Container (simplified - no risk colors)
                 Container(
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: widget.alert.riskLevel.backgroundColor,
+                    color: const Color(0xFFFFF8E1), // Calm amber background
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: widget.alert.riskLevel.color.withOpacity(0.3),
+                        color: const Color(0xFFF57C00).withOpacity(0.2),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),
                     ],
                   ),
                   child: Icon(
-                    widget.alert.riskLevel.icon,
+                    widget.alert.category.icon,
                     size: 50,
-                    color: widget.alert.riskLevel.color,
+                    color: const Color(0xFFF57C00),
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Risk Level Badge
+                // Category Badge (instead of risk level)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: widget.alert.riskLevel.color,
+                    color: const Color(0xFF2A9D8F),
                     borderRadius: BorderRadius.circular(30),
                   ),
                   child: Text(
-                    '${widget.alert.riskLevel.label} Risk',
+                    widget.alert.category.label,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,

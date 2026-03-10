@@ -16,80 +16,10 @@ class _PreventiveRecommendationsScreenState
     extends State<PreventiveRecommendationsScreen>
     with TickerProviderStateMixin {
   String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Unread', 'High', 'Medium', 'Low'];
+  final List<String> _filters = ['All', 'Unread'];  // Simplified filters
 
-  // Combined recommendations from sample data and AlertService
+  // Recommendations synced directly from Smart Insole health alerts
   List<RecommendationItem> _recommendations = [];
-
-  // Sample data - Always available as base recommendations
-  static final List<RecommendationItem> _sampleRecommendations = [
-    RecommendationItem(
-      id: '1',
-      type: RecommendationType.pressure,
-      title: 'Reduce Standing Time',
-      description: 'High pressure detected on heel. Rest your feet for 15 minutes.',
-      urgency: UrgencyLevel.high,
-      dateTime: DateTime.now().subtract(const Duration(hours: 2)),
-      icon: Icons.airline_seat_recline_normal,
-      isCompleted: false,
-      instructions: 'Sit down and elevate your feet above heart level. This helps reduce swelling and pressure on your heels.',
-    ),
-    RecommendationItem(
-      id: '2',
-      type: RecommendationType.temperature,
-      title: 'Cool Down Your Feet',
-      description: 'Elevated temperature detected. Apply cool compress.',
-      urgency: UrgencyLevel.high,
-      dateTime: DateTime.now().subtract(const Duration(hours: 5)),
-      icon: Icons.ac_unit,
-      isCompleted: false,
-      instructions: 'Use a cool (not cold) compress on your feet for 10-15 minutes. Avoid ice directly on skin.',
-    ),
-    RecommendationItem(
-      id: '3',
-      type: RecommendationType.movement,
-      title: 'Gentle Stretching',
-      description: 'Limited movement detected. Try ankle rotations.',
-      urgency: UrgencyLevel.medium,
-      dateTime: DateTime.now().subtract(const Duration(days: 1)),
-      icon: Icons.self_improvement,
-      isCompleted: true,
-      instructions: 'Rotate your ankles clockwise 10 times, then counterclockwise 10 times. Repeat 3 sets.',
-    ),
-    RecommendationItem(
-      id: '4',
-      type: RecommendationType.pressure,
-      title: 'Change Footwear',
-      description: 'Uneven pressure distribution. Check your shoes.',
-      urgency: UrgencyLevel.medium,
-      dateTime: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
-      icon: Icons.directions_walk,
-      isCompleted: false,
-      instructions: 'Inspect your shoes for wear. Consider diabetic-friendly footwear with proper cushioning.',
-    ),
-    RecommendationItem(
-      id: '5',
-      type: RecommendationType.temperature,
-      title: 'Stay Hydrated',
-      description: 'Maintain proper hydration for foot health.',
-      urgency: UrgencyLevel.low,
-      dateTime: DateTime.now().subtract(const Duration(days: 2)),
-      icon: Icons.water_drop,
-      isCompleted: true,
-      instructions: 'Drink at least 8 glasses of water daily. Proper hydration helps maintain healthy skin on your feet.',
-    ),
-    RecommendationItem(
-      id: '6',
-      type: RecommendationType.movement,
-      title: 'Schedule Doctor Visit',
-      description: 'Urgent checkup needed for foot assessment.',
-      urgency: UrgencyLevel.high,
-      dateTime: DateTime.now().subtract(const Duration(hours: 1)),
-      icon: Icons.medical_services,
-      isCompleted: false,
-      instructions: 'Book an urgent appointment with your podiatrist for a comprehensive foot examination. Early detection is crucial for preventing complications.',
-    ),
-  ];
 
   List<AnimationController> _pulseControllers = [];
 
@@ -109,19 +39,15 @@ class _PreventiveRecommendationsScreenState
   }
 
   void _loadRecommendations() {
-    // Start with sample recommendations
-    _recommendations = List.from(_sampleRecommendations);
+    // Get ONLY health alerts from Smart Insole (synced with Notification History)
+    final healthAlerts = AlertService()
+        .alerts
+        .where((a) => a.notificationType == alert_model.NotificationType.health)
+        .take(5) // Same limit as Smart Insole notifications
+        .toList();
 
-    // Add recommendations from AlertService alerts
-    final alerts = AlertService().alerts;
-    for (final alert in alerts) {
-      if (alert.recommendationTitle != null && !alert.isResolved) {
-        // Convert alert to recommendation if not already present
-        if (!_recommendations.any((r) => r.id == 'alert_${alert.id}')) {
-          _recommendations.add(_alertToRecommendation(alert));
-        }
-      }
-    }
+    // Convert health alerts to recommendations
+    _recommendations = healthAlerts.map(_alertToRecommendation).toList();
 
     // Sort by date (newest first)
     _recommendations.sort((a, b) => b.dateTime.compareTo(a.dateTime));
@@ -135,15 +61,14 @@ class _PreventiveRecommendationsScreenState
 
   RecommendationItem _alertToRecommendation(alert_model.SmartAlert alert) {
     return RecommendationItem(
-      id: 'alert_${alert.id}',
+      id: alert.id,
       type: _categoryToType(alert.category),
       title: alert.recommendationTitle ?? alert.title,
       description: alert.recommendationDescription ?? alert.shortDescription,
-      urgency: _riskLevelToUrgency(alert.riskLevel),
       dateTime: alert.timestamp,
       icon: _getCategoryIcon(alert.category),
       isCompleted: alert.isResolved,
-      instructions: alert.instructions ?? '',
+      instructions: alert.instructions ?? _getDefaultInstructions(alert.category),
     );
   }
 
@@ -155,18 +80,8 @@ class _PreventiveRecommendationsScreenState
         return RecommendationType.temperature;
       case alert_model.RiskCategory.movement:
       case alert_model.RiskCategory.general:
-        return RecommendationType.movement;
-    }
-  }
-
-  UrgencyLevel _riskLevelToUrgency(alert_model.RiskLevel level) {
-    switch (level) {
-      case alert_model.RiskLevel.high:
-        return UrgencyLevel.high;
-      case alert_model.RiskLevel.medium:
-        return UrgencyLevel.medium;
-      case alert_model.RiskLevel.low:
-        return UrgencyLevel.low;
+        // Map movement/general to pressure as fallback (since we only have 2 types now)
+        return RecommendationType.pressure;
     }
   }
 
@@ -177,9 +92,20 @@ class _PreventiveRecommendationsScreenState
       case alert_model.RiskCategory.temperature:
         return Icons.thermostat;
       case alert_model.RiskCategory.movement:
-        return Icons.directions_walk;
       case alert_model.RiskCategory.general:
         return Icons.health_and_safety;
+    }
+  }
+
+  String _getDefaultInstructions(alert_model.RiskCategory category) {
+    switch (category) {
+      case alert_model.RiskCategory.pressure:
+        return 'Reduce standing time and rest your feet. Consider changing to more supportive footwear with proper cushioning.';
+      case alert_model.RiskCategory.temperature:
+        return 'Apply a cool compress to the affected area for 10-15 minutes. Monitor for any signs of inflammation.';
+      case alert_model.RiskCategory.movement:
+      case alert_model.RiskCategory.general:
+        return 'Follow general foot care guidelines and consult your healthcare provider if symptoms persist.';
     }
   }
 
@@ -199,10 +125,9 @@ class _PreventiveRecommendationsScreenState
       ),
     );
 
-    // Start pulse animation for high urgency items
+    // Start pulse animation for incomplete items
     for (int i = 0; i < _recommendations.length; i++) {
-      if (_recommendations[i].urgency == UrgencyLevel.high &&
-          !_recommendations[i].isCompleted) {
+      if (!_recommendations[i].isCompleted) {
         _pulseControllers[i].repeat(reverse: true);
       }
     }
@@ -223,12 +148,6 @@ class _PreventiveRecommendationsScreenState
       switch (_selectedFilter) {
         case 'Unread':
           return !item.isCompleted;
-        case 'High':
-          return item.urgency == UrgencyLevel.high;
-        case 'Medium':
-          return item.urgency == UrgencyLevel.medium;
-        case 'Low':
-          return item.urgency == UrgencyLevel.low;
         default:
           return true;
       }
@@ -416,12 +335,6 @@ class _PreventiveRecommendationsScreenState
     switch (filter) {
       case 'Unread':
         return const Color(0xFF5C6BC0);
-      case 'High':
-        return const Color(0xFFE53935);
-      case 'Medium':
-        return const Color(0xFFFFA726);
-      case 'Low':
-        return const Color(0xFF66BB6A);
       default:
         return const Color(0xFF2A9D8F);
     }
@@ -464,20 +377,8 @@ class _PreventiveRecommendationsScreenState
           pulseController: _pulseControllers[originalIndex],
           onMarkComplete: () => _toggleComplete(originalIndex),
           onTap: () {
-            // Show detail dialog only for High Risk recommendations
-            if (item.urgency == UrgencyLevel.high) {
-              _showDetailDialog(item);
-            } else {
-              // For Medium/Low, show a simple snackbar
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(item.description),
-                  duration: const Duration(seconds: 2),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: const Color(0xFF2A9D8F),
-                ),
-              );
-            }
+            // Show detail dialog for all recommendations
+            _showDetailDialog(item);
           },
         );
       },
@@ -493,7 +394,7 @@ class _PreventiveRecommendationsScreenState
       if (_recommendations[index].isCompleted) {
         _pulseControllers[index].stop();
         _pulseControllers[index].reset();
-      } else if (_recommendations[index].urgency == UrgencyLevel.high) {
+      } else {
         _pulseControllers[index].repeat(reverse: true);
       }
     });
@@ -525,21 +426,24 @@ class _PreventiveRecommendationsScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _InfoRow(
-              color: Color(0xFFE53935),
-              label: 'High Risk',
-              description: 'Requires immediate attention',
+              color: Color(0xFF5C6BC0),
+              label: 'Pressure',
+              description: 'High plantar pressure detected (>200 kPa)',
             ),
             SizedBox(height: 12),
             _InfoRow(
-              color: Color(0xFFFFA726),
-              label: 'Medium Risk',
-              description: 'Should be addressed soon',
+              color: Color(0xFFEF5350),
+              label: 'Temperature',
+              description: 'Temperature difference detected (>2.2°C)',
             ),
-            SizedBox(height: 12),
-            _InfoRow(
-              color: Color(0xFF66BB6A),
-              label: 'Low Risk',
-              description: 'Preventive care tips',
+            SizedBox(height: 16),
+            Text(
+              'Synced with Smart Insole notifications',
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF6B7280),
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ),
@@ -641,7 +545,7 @@ class _RecommendationCard extends StatelessWidget {
           border: Border.all(
             color: item.isCompleted
                 ? Colors.grey[300]!
-                : _getUrgencyColor(item.urgency).withOpacity(0.3),
+                : _getTypeColor(item.type).withOpacity(0.3),
             width: 1,
           ),
         ),
@@ -660,8 +564,8 @@ class _RecommendationCard extends StatelessWidget {
       ),
     );
 
-    // Add pulse animation for high urgency items
-    if (item.urgency == UrgencyLevel.high && !item.isCompleted) {
+    // Add subtle animation for incomplete items
+    if (!item.isCompleted) {
       return AnimatedBuilder(
         animation: pulseController,
         builder: (context, child) {
@@ -670,10 +574,10 @@ class _RecommendationCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFE53935)
-                      .withOpacity(0.2 * pulseController.value),
-                  blurRadius: 20 * pulseController.value,
-                  spreadRadius: 2 * pulseController.value,
+                  color: _getTypeColor(item.type)
+                      .withOpacity(0.1 * pulseController.value),
+                  blurRadius: 10 * pulseController.value,
+                  spreadRadius: 1 * pulseController.value,
                 ),
               ],
             ),
@@ -688,40 +592,20 @@ class _RecommendationCard extends StatelessWidget {
   }
 
   Widget _buildIconSection() {
-    return Stack(
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: _getTypeColor(item.type).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(
-            item.icon,
-            color: item.isCompleted
-                ? Colors.grey[400]
-                : _getTypeColor(item.type),
-            size: 28,
-          ),
-        ),
-        // Urgency dot
-        Positioned(
-          right: 0,
-          top: 0,
-          child: Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: item.isCompleted
-                  ? Colors.grey[400]
-                  : _getUrgencyColor(item.urgency),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-          ),
-        ),
-      ],
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: _getTypeColor(item.type).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Icon(
+        item.icon,
+        color: item.isCompleted
+            ? Colors.grey[400]
+            : _getTypeColor(item.type),
+        size: 28,
+      ),
     );
   }
 
@@ -819,25 +703,12 @@ class _RecommendationCard extends StatelessWidget {
     );
   }
 
-  Color _getUrgencyColor(UrgencyLevel urgency) {
-    switch (urgency) {
-      case UrgencyLevel.high:
-        return const Color(0xFFE53935);
-      case UrgencyLevel.medium:
-        return const Color(0xFFFFA726);
-      case UrgencyLevel.low:
-        return const Color(0xFF66BB6A);
-    }
-  }
-
   Color _getTypeColor(RecommendationType type) {
     switch (type) {
       case RecommendationType.pressure:
-        return const Color(0xFF5C6BC0);
+        return const Color(0xFF5C6BC0);  // Indigo for pressure
       case RecommendationType.temperature:
-        return const Color(0xFFEF5350);
-      case RecommendationType.movement:
-        return const Color(0xFF26A69A);
+        return const Color(0xFFFF7043);  // Orange for temperature (matching weekly report)
     }
   }
 
@@ -981,23 +852,9 @@ class _DetailBottomSheet extends StatelessWidget {
   }
 
   Widget _buildUrgencyBadge() {
-    String label;
-    Color color;
-
-    switch (item.urgency) {
-      case UrgencyLevel.high:
-        label = 'High Priority';
-        color = const Color(0xFFE53935);
-        break;
-      case UrgencyLevel.medium:
-        label = 'Medium Priority';
-        color = const Color(0xFFFFA726);
-        break;
-      case UrgencyLevel.low:
-        label = 'Low Priority';
-        color = const Color(0xFF66BB6A);
-        break;
-    }
+    // Show type category instead of urgency
+    String label = item.type.name.toUpperCase();
+    Color color = _getTypeColor(item.type);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1019,26 +876,21 @@ class _DetailBottomSheet extends StatelessWidget {
   Color _getTypeColor(RecommendationType type) {
     switch (type) {
       case RecommendationType.pressure:
-        return const Color(0xFF5C6BC0);
+        return const Color(0xFF5C6BC0);  // Indigo for pressure
       case RecommendationType.temperature:
-        return const Color(0xFFEF5350);
-      case RecommendationType.movement:
-        return const Color(0xFF26A69A);
+        return const Color(0xFFFF7043);  // Orange for temperature
     }
   }
 }
 
-// Data Models
-enum UrgencyLevel { high, medium, low }
-
-enum RecommendationType { pressure, temperature, movement }
+// Data Models - Only pressure and temperature (matching Smart Insole)
+enum RecommendationType { pressure, temperature }
 
 class RecommendationItem {
   final String id;
   final RecommendationType type;
   final String title;
   final String description;
-  final UrgencyLevel urgency;
   final DateTime dateTime;
   final IconData icon;
   final bool isCompleted;
@@ -1049,7 +901,6 @@ class RecommendationItem {
     required this.type,
     required this.title,
     required this.description,
-    required this.urgency,
     required this.dateTime,
     required this.icon,
     required this.isCompleted,
@@ -1061,7 +912,6 @@ class RecommendationItem {
     RecommendationType? type,
     String? title,
     String? description,
-    UrgencyLevel? urgency,
     DateTime? dateTime,
     IconData? icon,
     bool? isCompleted,
@@ -1072,7 +922,6 @@ class RecommendationItem {
       type: type ?? this.type,
       title: title ?? this.title,
       description: description ?? this.description,
-      urgency: urgency ?? this.urgency,
       dateTime: dateTime ?? this.dateTime,
       icon: icon ?? this.icon,
       isCompleted: isCompleted ?? this.isCompleted,

@@ -64,8 +64,10 @@ class _NotificationBellWidgetState extends State<NotificationBellWidget>
 
   void _updateUnreadCount() {
     if (mounted) {
+      final newCount = AlertService().unreadCount;
+      debugPrint('NotificationBell: Updating unread count to $newCount');
       setState(() {
-        _unreadCount = AlertService().unreadCount;
+        _unreadCount = newCount;
       });
     }
   }
@@ -106,7 +108,7 @@ class _NotificationBellWidgetState extends State<NotificationBellWidget>
           border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         ),
         child: AnimatedBuilder(
-          animation: _shakeAnimation,
+          animation: _shakeController,
           builder: (context, child) {
             return Transform.rotate(
               angle: _shakeAnimation.value,

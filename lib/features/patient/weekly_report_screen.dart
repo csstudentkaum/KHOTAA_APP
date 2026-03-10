@@ -23,10 +23,9 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   // Pressure data for 7 days (kPa)
   final List<double> _pressureData = [62, 68, 75, 70, 82, 73, 65];
   
-  // Alert counts
-  final int _highAlerts = 3;
-  final int _mediumAlerts = 5;
-  final int _lowAlerts = 8;
+  // Alert counts by category (matching RiskCategory from smart_alert.dart)
+  final int _temperatureAlerts = 4;  // Temperature-related alerts
+  final int _pressureAlerts = 6;      // Pressure-related alerts
   
   bool _isDownloading = false;
 
@@ -46,11 +45,12 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     return _weekDays[maxIndex];
   }
 
-  int get _totalAlerts => _highAlerts + _mediumAlerts + _lowAlerts;
+  int get _totalAlerts => _temperatureAlerts + _pressureAlerts;
 
   String get _overallRiskStatus {
-    if (_highAlerts > 3) return 'High';
-    if (_highAlerts > 0 || _mediumAlerts > 5) return 'Medium';
+    // Based on total alerts and severity
+    if (_totalAlerts > 8) return 'High';
+    if (_totalAlerts > 4) return 'Medium';
     return 'Low';
   }
 
@@ -529,25 +529,20 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          // Alert breakdown items
+          // Alert breakdown by category (matching RiskCategory)
           _buildAlertBreakdownItem(
-            label: 'High Risk Alerts',
-            count: _highAlerts,
-            color: const Color(0xFFE53935),
+            label: 'Temperature Alerts',
+            count: _temperatureAlerts,
+            color: const Color(0xFFFF7043), // Orange for temperature
+            icon: Icons.thermostat_rounded,
             total: _totalAlerts,
           ),
           const SizedBox(height: 12),
           _buildAlertBreakdownItem(
-            label: 'Medium Risk Alerts',
-            count: _mediumAlerts,
-            color: const Color(0xFFFFA726),
-            total: _totalAlerts,
-          ),
-          const SizedBox(height: 12),
-          _buildAlertBreakdownItem(
-            label: 'Low Risk Alerts',
-            count: _lowAlerts,
-            color: const Color(0xFF4CAF50),
+            label: 'Pressure Alerts',
+            count: _pressureAlerts,
+            color: const Color(0xFF5C6BC0), // Indigo for pressure
+            icon: Icons.compress_rounded,
             total: _totalAlerts,
           ),
         ],
@@ -559,6 +554,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     required String label,
     required int count,
     required Color color,
+    required IconData icon,
     required int total,
   }) {
     double percentage = total > 0 ? count / total : 0;
@@ -572,11 +568,15 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
             Row(
               children: [
                 Container(
-                  width: 14,
-                  height: 14,
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
                     color: color,
-                    borderRadius: BorderRadius.circular(4),
+                    size: 18,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -812,11 +812,9 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
                     ),
                   ),
                   pw.SizedBox(height: 16),
-                  _buildPdfAlertRow('High Risk Alerts', _highAlerts, PdfColors.red),
+                  _buildPdfAlertRow('Temperature Alerts', _temperatureAlerts, PdfColors.orange),
                   pw.SizedBox(height: 8),
-                  _buildPdfAlertRow('Medium Risk Alerts', _mediumAlerts, PdfColors.orange),
-                  pw.SizedBox(height: 8),
-                  _buildPdfAlertRow('Low Risk Alerts', _lowAlerts, PdfColors.green),
+                  _buildPdfAlertRow('Pressure Alerts', _pressureAlerts, PdfColors.indigo),
                 ],
               ),
             ),

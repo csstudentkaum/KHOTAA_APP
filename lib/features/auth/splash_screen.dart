@@ -35,27 +35,41 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _navigateAfterDelay() async {
+    debugPrint('SplashScreen: Starting navigation delay...');
     await Future.delayed(const Duration(milliseconds: 2500));
-    if (!mounted) return;
+    debugPrint('SplashScreen: Delay complete, checking mounted...');
+    if (!mounted) {
+      debugPrint('SplashScreen: Widget not mounted, returning');
+      return;
+    }
 
     try {
       final authService = AuthService();
+      debugPrint('SplashScreen: isLoggedIn = ${authService.isLoggedIn}');
 
       if (authService.isLoggedIn) {
+        debugPrint('SplashScreen: User is logged in, getting role...');
         // Check user role and navigate to appropriate home
         final role = await authService.getCurrentUserRole();
-        if (!mounted) return;
+        debugPrint('SplashScreen: Got role = $role');
+        if (!mounted) {
+          debugPrint('SplashScreen: Widget not mounted after role fetch');
+          return;
+        }
         if (role == 'doctor') {
+          debugPrint('SplashScreen: Navigating to doctor-home');
           Navigator.pushReplacementNamed(context, '/doctor-home');
         } else {
+          debugPrint('SplashScreen: Navigating to patient-home');
           Navigator.pushReplacementNamed(context, '/patient-home');
         }
       } else {
+        debugPrint('SplashScreen: User not logged in, navigating to login');
         Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
       // If Firebase fails, go to login screen anyway
-      debugPrint('Navigation error: $e');
+      debugPrint('SplashScreen Navigation error: $e');
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/login');
     }

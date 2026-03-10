@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
 import '../../shared/widgets/notification_bell_widget.dart';
+import '../../services/expert_system/expert_system.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -12,9 +13,14 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
+  // Expert System Integration
+  final ExpertSystemIntegration _expertSystem = ExpertSystemIntegration();
+  ExpertSystemResult? _lastExpertResult;
+
   // Connection status
   bool _isConnected = true;
-  String _riskLevel = 'Low'; // Low, Medium, High
+  bool _hasAbnormalReading = false; // Expert system detection
+  String _abnormalType = ''; // 'pressure', 'temperature', or 'both'
 
   // Real-time data
   double _temperature = 32.5;
@@ -73,8 +79,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           // Update foot sensor data
           _updateFootSensorData(random);
 
-          // Update risk level based on readings
-          _updateRiskLevel();
+          // Check for abnormal readings (simple threshold check)
+          _checkForAbnormalReadings();
         });
         _dataUpdateController.forward().then((_) => _dataUpdateController.reset());
       }
@@ -90,19 +96,94 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  void _updateRiskLevel() {
+  // Expert system threshold-based abnormal detection
+  // Uses IWGDF clinical thresholds for accurate risk assessment
+  void _checkForAbnormalReadings() async {
+    // Get max temperature from each foot for expert system input
+    final leftMaxTemp = _leftFootTemp.reduce(max);
+    final rightMaxTemp = _rightFootTemp.reduce(max);
+
+    // Get max pressure (convert 0-1 range to kPa for expert system)
+    final maxPressure = [
+      ..._leftFootPressure,
+      ..._rightFootPressure
+    ].reduce(max) * 300; // Scale to approximate kPa
+
+    // Use expert system for evaluation
+    try {
+      final result = await _expertSystem.processSensorData(
+        leftFootTemperature: leftMaxTemp,
+        rightFootTemperature: rightMaxTemp,
+        plantarPressure: maxPressure,
+        pressureBaseline: 150.0, // Default baseline in kPa
+        sensorRegion: SensorRegion.metatarsal1, // Default to MTK1 for simulation
+        footSide: 'left',
+      );
+
+      if (mounted) {
+        setState(() {
+          _lastExpertResult = result;
+          _hasAbnormalReading = result.hasRisk;
+
+          // Determine abnormal type from triggered rules
+          if (result.hasRisk) {
+            final hasTemp = result.triggeredRules
+                .any((r) => r.type == RuleType.temperatureAsymmetry);
+            final hasPressure = result.triggeredRules
+                .any((r) => r.type == RuleType.elevatedPressure ||
+                    r.type == RuleType.pressureAboveBaseline);
+            final hasCombined = result.triggeredRules
+                .any((r) => r.type == RuleType.combinedRisk);
+
+            if (hasCombined || (hasTemp && hasPressure)) {
+              _abnormalType = 'both';
+            } else if (hasPressure) {
+              _abnormalType = 'pressure';
+            } else if (hasTemp) {
+              _abnormalType = 'temperature';
+            } else {
+              _abnormalType = 'both'; // Default for combined risk
+            }
+          } else {
+            _abnormalType = '';
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Expert system error: $e');
+      // Fallback to simple threshold check
+      _performSimpleThresholdCheck();
+    }
+  }
+
+  // Fallback simple threshold check
+  void _performSimpleThresholdCheck() {
+    const double pressureThreshold = 0.75;
+    const double tempHighThreshold = 34.0;
+    const double tempLowThreshold = 30.5;
+
     double maxPressure = [
       ..._leftFootPressure,
       ..._rightFootPressure
     ].reduce(max);
     double maxTemp = [..._leftFootTemp, ..._rightFootTemp].reduce(max);
+    double minTemp = [..._leftFootTemp, ..._rightFootTemp].reduce(min);
 
-    if (maxPressure > 0.8 || maxTemp > 34.5) {
-      _riskLevel = 'High';
-    } else if (maxPressure > 0.6 || maxTemp > 33.5) {
-      _riskLevel = 'Medium';
+    final bool abnormalPressure = maxPressure > pressureThreshold;
+    final bool abnormalTemp = maxTemp > tempHighThreshold || minTemp < tempLowThreshold;
+
+    if (abnormalPressure && abnormalTemp) {
+      _hasAbnormalReading = true;
+      _abnormalType = 'both';
+    } else if (abnormalPressure) {
+      _hasAbnormalReading = true;
+      _abnormalType = 'pressure';
+    } else if (abnormalTemp) {
+      _hasAbnormalReading = true;
+      _abnormalType = 'temperature';
     } else {
-      _riskLevel = 'Low';
+      _hasAbnormalReading = false;
+      _abnormalType = '';
     }
   }
 
@@ -125,15 +206,90 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
-  Color _getRiskColor() {
-    switch (_riskLevel) {
-      case 'High':
-        return const Color(0xFFE53935);
-      case 'Medium':
-        return const Color(0xFFFFA726);
+  // Get status color based on abnormal readings
+  Color _getStatusColor() {
+    return _hasAbnormalReading ? const Color(0xFFF57C00) : const Color(0xFF4CAF50);
+  }
+
+  // Get abnormal message for alert banner
+  String _getAbnormalMessage() {
+    switch (_abnormalType) {
+      case 'pressure':
+        return 'Abnormal pressure detected. Please check your foot or reduce pressure.';
+      case 'temperature':
+        return 'Abnormal temperature detected. Please check your foot.';
+      case 'both':
+        return 'Abnormal pressure and temperature detected. Please check your foot.';
       default:
-        return const Color(0xFF4CAF50);
+        return '';
     }
+  }
+
+  // Simple alert banner - only shows when abnormal (non-intrusive)
+  Widget _buildAlertBanner() {
+    if (!_hasAbnormalReading) return const SizedBox.shrink();
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1), // Light amber - calm alert
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFFFCC02),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFCC02).withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.info_outline,
+              color: Color(0xFFF57C00),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Attention Needed',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFF57C00),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _getAbnormalMessage(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -148,6 +304,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Simple alert banner - only shows when abnormal
+              _buildAlertBanner(),
               _buildLiveStatusSection(),
               const SizedBox(height: 24),
               _buildFootVisualization(),
@@ -245,8 +403,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
           const SizedBox(height: 20),
-          // Risk Level
-          _buildRiskLevelIndicator(),
+          // Foot Status (simplified - no risk levels)
+          _buildStatusIndicator(),
         ],
       ),
     );
@@ -371,19 +529,20 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildRiskLevelIndicator() {
+  // Simple status indicator - calm and patient-friendly
+  Widget _buildStatusIndicator() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            _getRiskColor().withOpacity(0.1),
-            _getRiskColor().withOpacity(0.05),
+            _getStatusColor().withOpacity(0.1),
+            _getStatusColor().withOpacity(0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _getRiskColor().withOpacity(0.3),
+          color: _getStatusColor().withOpacity(0.3),
           width: 1.5,
         ),
       ),
@@ -392,16 +551,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _getRiskColor().withOpacity(0.15),
+              color: _getStatusColor().withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              _riskLevel == 'High'
-                  ? Icons.warning_rounded
-                  : _riskLevel == 'Medium'
-                      ? Icons.info_rounded
-                      : Icons.check_circle_rounded,
-              color: _getRiskColor(),
+              _hasAbnormalReading
+                  ? Icons.info_outline
+                  : Icons.check_circle_outline,
+              color: _getStatusColor(),
               size: 28,
             ),
           ),
@@ -411,7 +568,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Current Risk Level',
+                  'Foot Status',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[600],
@@ -420,39 +577,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$_riskLevel Risk',
+                  _hasAbnormalReading ? 'Needs Attention' : 'Normal',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _getRiskColor(),
+                    color: _getStatusColor(),
                   ),
                 ),
               ],
             ),
           ),
-          // Risk level indicator bars
-          Row(
-            children: [
-              _buildRiskBar(true),
-              const SizedBox(width: 4),
-              _buildRiskBar(_riskLevel == 'Medium' || _riskLevel == 'High'),
-              const SizedBox(width: 4),
-              _buildRiskBar(_riskLevel == 'High'),
-            ],
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRiskBar(bool isActive) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      width: 8,
-      height: 32,
-      decoration: BoxDecoration(
-        color: isActive ? _getRiskColor() : Colors.grey.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(4),
       ),
     );
   }

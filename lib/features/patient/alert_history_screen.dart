@@ -4,7 +4,7 @@ import '../../services/alert_service.dart';
 import 'risk_explanation_screen.dart';
 
 /// Alert History Screen
-/// Shows all past alerts in a scrollable, chronological list
+/// Shows notifications grouped by type: Health Alerts and Appointments
 class AlertHistoryScreen extends StatefulWidget {
   const AlertHistoryScreen({Key? key}) : super(key: key);
 
@@ -12,22 +12,10 @@ class AlertHistoryScreen extends StatefulWidget {
   State<AlertHistoryScreen> createState() => _AlertHistoryScreenState();
 }
 
-class _AlertHistoryScreenState extends State<AlertHistoryScreen>
-    with SingleTickerProviderStateMixin {
-  String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Unread', 'High', 'Medium', 'Low'];
-  late AnimationController _listAnimationController;
-
+class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _listAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _listAnimationController.forward();
-
-    // Listen for alert changes
     AlertService().addListener(_onAlertsChanged);
   }
 
@@ -37,164 +25,374 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
   @override
   void dispose() {
-    _listAnimationController.dispose();
     AlertService().removeListener(_onAlertsChanged);
     super.dispose();
   }
 
-  List<SmartAlert> get _filteredAlerts {
-    final alerts = AlertService().alerts;
-    switch (_selectedFilter) {
-      case 'High':
-        return alerts.where((a) => a.riskLevel == RiskLevel.high).toList();
-      case 'Medium':
-        return alerts.where((a) => a.riskLevel == RiskLevel.medium).toList();
-      case 'Low':
-        return alerts.where((a) => a.riskLevel == RiskLevel.low).toList();
-      case 'Unread':
-        return alerts.where((a) => !a.isViewed).toList();
-      default:
-        return alerts;
-    }
+  List<SmartAlert> get _healthAlerts {
+    return AlertService()
+        .alerts
+        .where((a) => a.notificationType == NotificationType.health)
+        .take(5) // Limit to 5 for now
+        .toList();
   }
 
-  Color _getFilterColor(String filter) {
-    switch (filter) {
-      case 'Unread':
-        return const Color(0xFF5C6BC0);  // Indigo for unread
-      case 'High':
-        return const Color(0xFFE53935);  // Red for high priority
-      case 'Medium':
-        return const Color(0xFFFFA726);  // Orange for medium
-      case 'Low':
-        return const Color(0xFF66BB6A);  // Green for low
-      default:
-        return const Color(0xFF2A9D8F);  // Teal for All
-    }
+  List<SmartAlert> get _appointmentAlerts {
+    return AlertService()
+        .alerts
+        .where((a) => a.notificationType == NotificationType.appointment)
+        .take(5) // Limit to 5 for now
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9F8),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F5F5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.arrow_back_ios_new,
-              color: Color(0xFF1A1A2E),
-              size: 18,
-            ),
+      appBar: _buildAppBar(),
+      body: _buildBody(),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      leading: IconButton(
+        icon: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(10),
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Notifications',
-          style: TextStyle(
+          child: const Icon(
+            Icons.arrow_back_ios_new,
             color: Color(0xFF1A1A2E),
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+            size: 18,
           ),
         ),
-        centerTitle: true,
-        actions: [
-          if (AlertService().unreadCount > 0)
-            TextButton(
-              onPressed: () {
-                AlertService().markAllAsViewed();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('All notifications marked as read'),
-                    backgroundColor: Color(0xFF2A9D8F),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              child: const Text(
-                'Mark all read',
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text(
+        'Notification History',
+        style: TextStyle(
+          color: Color(0xFF1A1A2E),
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      centerTitle: true,
+      actions: [
+        if (AlertService().unreadCount > 0)
+          TextButton(
+            onPressed: () {
+              AlertService().markAllAsViewed();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All notifications marked as read'),
+                  backgroundColor: Color(0xFF2A9D8F),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text(
+              'Mark all read',
+              style: TextStyle(
+                color: Color(0xFF2A9D8F),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    final hasHealthAlerts = _healthAlerts.isNotEmpty;
+    final hasAppointments = _appointmentAlerts.isNotEmpty;
+
+    if (!hasHealthAlerts && !hasAppointments) {
+      return _buildEmptyState();
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Smart Insole Section
+          _buildSection(
+            title: 'Smart Insole',
+            icon: Icons.sensors_outlined,
+            accentColor: const Color(0xFFF57C00),
+            alerts: _healthAlerts,
+            emptyMessage: 'No insole alerts yet.',
+          ),
+          const SizedBox(height: 24),
+          // Consultation Booking Section
+          _buildSection(
+            title: 'Consultation Booking',
+            icon: Icons.medical_services_outlined,
+            accentColor: const Color(0xFF5C6BC0),
+            alerts: _appointmentAlerts,
+            emptyMessage: 'No consultation notifications yet.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection({
+    required String title,
+    required IconData icon,
+    required Color accentColor,
+    required List<SmartAlert> alerts,
+    required String emptyMessage,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Header
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: accentColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${alerts.length}',
                 style: TextStyle(
-                  color: Color(0xFF2A9D8F),
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
+                  color: accentColor,
                 ),
               ),
             ),
-          const SizedBox(width: 8),
-        ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Alerts List or Empty Message
+        if (alerts.isEmpty)
+          _buildEmptySectionMessage(emptyMessage, accentColor)
+        else
+          ...alerts.map((alert) => _buildAlertCard(alert, accentColor)),
+      ],
+    );
+  }
+
+  Widget _buildEmptySectionMessage(String message, Color accentColor) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      body: Column(
+      child: Row(
         children: [
-          // Filter chips
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _filters.map((filter) {
-                  final isSelected = _selectedFilter == filter;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(
-                        filter == 'Unread'
-                            ? 'Unread (${AlertService().unreadCount})'
-                            : filter,
-                        style: TextStyle(
-                          color: isSelected 
-                              ? Colors.white 
-                              : const Color(0xFF6B7280),
-                          fontWeight: isSelected 
-                              ? FontWeight.w600 
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = filter;
-                        });
-                      },
-                      backgroundColor: Colors.white,
-                      selectedColor: _getFilterColor(filter),
-                      checkmarkColor: Colors.white,
-                      side: BorderSide(
-                        color: isSelected
-                            ? _getFilterColor(filter)
-                            : const Color(0xFFE5E7EB),
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+          Icon(
+            Icons.inbox_outlined,
+            color: Colors.grey[400],
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
             ),
           ),
-          const SizedBox(height: 8),
-          // Alert list
-          Expanded(
-            child: _filteredAlerts.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _filteredAlerts.length,
-                    itemBuilder: (context, index) {
-                      return _buildAlertItem(
-                        _filteredAlerts[index],
-                        index,
-                      );
-                    },
-                  ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAlertCard(SmartAlert alert, Color accentColor) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RiskExplanationScreen(alert: alert),
+          ),
+        ).then((_) => setState(() {}));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: alert.isViewed
+                ? const Color(0xFFE5E7EB)
+                : accentColor.withOpacity(0.4),
+            width: alert.isViewed ? 1 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              // Color accent bar on the left
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(14),
+                    bottomLeft: Radius.circular(14),
+                  ),
+                ),
+              ),
+              // Main content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Icon
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: accentColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          alert.category.icon,
+                          color: accentColor,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Content
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    alert.title,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: alert.isViewed
+                                          ? const Color(0xFF4B5563)
+                                          : const Color(0xFF1A1A2E),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                // Unread indicator
+                                if (!alert.isViewed)
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    margin: const EdgeInsets.only(left: 8),
+                                    decoration: BoxDecoration(
+                                      color: accentColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            // Description
+                            Text(
+                              alert.shortDescription,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                                height: 1.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            // Timestamp
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.access_time,
+                                      size: 14,
+                                      color: Colors.grey[400],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      alert.formattedTime,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'View',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      size: 16,
+                                      color: Colors.grey[400],
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -227,216 +425,15 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            _selectedFilter == 'All'
-                ? 'You have no alerts yet.\nWe\'ll notify you when something needs attention.'
-                : 'No $_selectedFilter risk alerts found.',
+          const Text(
+            'You have no notifications yet.\nWe will notify you when something needs attention.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               color: Color(0xFF6B7280),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAlertItem(SmartAlert alert, int index) {
-    return SlideTransition(
-      position: Tween<Offset>(
-        begin: const Offset(1, 0),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(
-        parent: _listAnimationController,
-        curve: Interval(
-          (index * 0.1).clamp(0.0, 1.0),
-          ((index * 0.1) + 0.3).clamp(0.0, 1.0),
-          curve: Curves.easeOut,
-        ),
-      )),
-      child: GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => RiskExplanationScreen(alert: alert),
-            ),
-          ).then((_) => setState(() {}));
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: alert.isViewed
-                  ? const Color(0xFFE5E7EB)
-                  : alert.riskLevel.color.withOpacity(0.3),
-              width: alert.isViewed ? 1 : 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              // Unread indicator
-              if (!alert.isViewed)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    margin: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: alert.riskLevel.color,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: alert.riskLevel.color.withOpacity(0.4),
-                          blurRadius: 6,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Risk Level Icon
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: alert.riskLevel.backgroundColor,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        alert.riskLevel.icon,
-                        color: alert.riskLevel.color,
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    // Content
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Risk Level Badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: alert.riskLevel.color.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  alert.riskLevel.label,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: alert.riskLevel.color,
-                                  ),
-                                ),
-                              ),
-                              // Timestamp
-                              Text(
-                                alert.formattedTime,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          // Title
-                          Text(
-                            alert.title,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: alert.isViewed
-                                  ? const Color(0xFF4B5563)
-                                  : const Color(0xFF1A1A2E),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          // Description
-                          Text(
-                            alert.shortDescription,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 10),
-                          // Category chip and arrow
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    alert.category.icon,
-                                    size: 16,
-                                    color: const Color(0xFF2A9D8F),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    alert.category.label,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xFF2A9D8F),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  Text(
-                                    'View Details',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey[500],
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    size: 20,
-                                    color: Colors.grey[400],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

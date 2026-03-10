@@ -1,6 +1,50 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+/// Notification type for categorizing alerts
+enum NotificationType {
+  health,      // Health alerts from expert system (temperature/pressure)
+  appointment, // Doctor appointments and reminders
+}
+
+extension NotificationTypeExtension on NotificationType {
+  String get label {
+    switch (this) {
+      case NotificationType.health:
+        return 'Health Alert';
+      case NotificationType.appointment:
+        return 'Appointment';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case NotificationType.health:
+        return Icons.monitor_heart_outlined;
+      case NotificationType.appointment:
+        return Icons.calendar_month_outlined;
+    }
+  }
+
+  Color get accentColor {
+    switch (this) {
+      case NotificationType.health:
+        return const Color(0xFFF57C00); // Orange for health
+      case NotificationType.appointment:
+        return const Color(0xFF5C6BC0); // Blue for appointments
+    }
+  }
+
+  Color get backgroundColor {
+    switch (this) {
+      case NotificationType.health:
+        return const Color(0xFFFFF3E0); // Light orange
+      case NotificationType.appointment:
+        return const Color(0xFFE8EAF6); // Light blue
+    }
+  }
+}
+
 /// Risk level enumeration for alerts
 enum RiskLevel {
   high,
@@ -113,6 +157,7 @@ class SmartAlert {
   final String detailedExplanation;
   final RiskLevel riskLevel;
   final RiskCategory category;
+  final NotificationType notificationType; // health or appointment
   final DateTime timestamp;
   final bool isViewed;
   final bool isResolved;
@@ -133,6 +178,7 @@ class SmartAlert {
     required this.detailedExplanation,
     required this.riskLevel,
     required this.category,
+    this.notificationType = NotificationType.health, // default to health
     required this.timestamp,
     this.isViewed = false,
     this.isResolved = false,
@@ -153,6 +199,7 @@ class SmartAlert {
     String? detailedExplanation,
     RiskLevel? riskLevel,
     RiskCategory? category,
+    NotificationType? notificationType,
     DateTime? timestamp,
     bool? isViewed,
     bool? isResolved,
@@ -171,6 +218,7 @@ class SmartAlert {
       detailedExplanation: detailedExplanation ?? this.detailedExplanation,
       riskLevel: riskLevel ?? this.riskLevel,
       category: category ?? this.category,
+      notificationType: notificationType ?? this.notificationType,
       timestamp: timestamp ?? this.timestamp,
       isViewed: isViewed ?? this.isViewed,
       isResolved: isResolved ?? this.isResolved,
@@ -200,6 +248,10 @@ class SmartAlert {
         (e) => e.name == data['category'],
         orElse: () => RiskCategory.general,
       ),
+      notificationType: NotificationType.values.firstWhere(
+        (e) => e.name == data['notificationType'],
+        orElse: () => NotificationType.health,
+      ),
       timestamp: (data['timestamp'] as Timestamp).toDate(),
       isViewed: data['isViewed'] ?? false,
       isResolved: data['isResolved'] ?? false,
@@ -220,6 +272,7 @@ class SmartAlert {
       'detailedExplanation': detailedExplanation,
       'riskLevel': riskLevel.name,
       'category': category.name,
+      'notificationType': notificationType.name,
       'timestamp': Timestamp.fromDate(timestamp),
       'isViewed': isViewed,
       'isResolved': isResolved,
@@ -263,6 +316,7 @@ class SmartAlert {
   }
 
   /// Create an alert from sensor reading data
+  /// Simplified: Only create meaningful alerts when thresholds are exceeded
   factory SmartAlert.fromSensorReading({
     required String id,
     required String patientId,
@@ -271,7 +325,6 @@ class SmartAlert {
     required String footSide,
     required String sensorRegion,
   }) {
-    RiskLevel riskLevel;
     RiskCategory category;
     String title;
     String shortDescription;
@@ -280,101 +333,71 @@ class SmartAlert {
     String? recommendationDescription;
     String? instructions;
 
-    final isHighPressure = pressureValue > 250;
-    final isMediumPressure = pressureValue > 200;
-    final isHighTemp = temperatureValue > 38.0 || temperatureValue < 34.5;
-    final isMediumTemp = temperatureValue > 37.5 || temperatureValue < 35.0;
+    // Simplified threshold-based detection
+    // Pressure threshold: > 250 units is abnormal
+    // Temperature threshold: > 38°C or < 34.5°C is abnormal
+    final isAbnormalPressure = pressureValue > 250;
+    final isAbnormalTemp = temperatureValue > 38.0 || temperatureValue < 34.5;
 
-    if (isHighPressure && isHighTemp) {
-      riskLevel = RiskLevel.high;
+    if (isAbnormalPressure && isAbnormalTemp) {
       category = RiskCategory.pressure;
-      title = 'Critical Foot Alert';
-      shortDescription = 'High pressure and abnormal temperature detected';
+      title = 'Pressure & Temperature Alert';
+      shortDescription = 'Please check your $footSide foot';
       detailedExplanation = 
-          'Your smart insole has detected a critical combination of high pressure '
-          '(${pressureValue.toStringAsFixed(1)} units) and abnormal temperature '
-          '(${temperatureValue.toStringAsFixed(1)}°C) in your $footSide foot, '
-          'specifically in the $sensorRegion region.\n\n'
-          'This combination can indicate early signs of tissue stress or potential '
-          'ulcer formation. Immediate attention is recommended.';
-      recommendationTitle = 'Seek Immediate Care';
-      recommendationDescription = 'Contact your healthcare provider urgently';
-      instructions = 'Rest your foot immediately and contact your podiatrist or visit an urgent care clinic within 24 hours.';
-    } else if (isHighPressure) {
-      riskLevel = RiskLevel.high;
+          'Your smart insole detected unusual readings on your $footSide foot '
+          'in the $sensorRegion area.\n\n'
+          '• Pressure: ${pressureValue.toStringAsFixed(1)} units\n'
+          '• Temperature: ${temperatureValue.toStringAsFixed(1)}°C\n\n'
+          'Consider taking a short break and checking your foot for any discomfort.';
+      recommendationTitle = 'Take a Break';
+      recommendationDescription = 'Rest your feet and check for discomfort';
+      instructions = 'Sit down and rest your feet for 15-20 minutes. Check your foot for any redness or irritation.';
+    } else if (isAbnormalPressure) {
       category = RiskCategory.pressure;
-      title = 'High Pressure Alert';
-      shortDescription = 'Excessive pressure on $footSide foot';
+      title = 'Pressure Alert';
+      shortDescription = 'Elevated pressure on $footSide foot';
       detailedExplanation = 
-          'Your smart insole has detected high pressure (${pressureValue.toStringAsFixed(1)} units) '
-          'on your $footSide foot in the $sensorRegion region.\n\n'
-          'Prolonged high pressure can lead to tissue damage and increase the risk '
-          'of diabetic foot ulcers. Taking a break and adjusting your footwear is recommended.';
-      recommendationTitle = 'Reduce Standing Time';
-      recommendationDescription = 'Rest your feet and redistribute pressure';
-      instructions = 'Sit down and elevate your feet for 15-20 minutes. Consider changing to better-cushioned footwear.';
-    } else if (isHighTemp) {
-      riskLevel = RiskLevel.high;
+          'Your smart insole detected elevated pressure '
+          '(${pressureValue.toStringAsFixed(1)} units) on your $footSide foot '
+          'in the $sensorRegion area.\n\n'
+          'Consider taking a short break to reduce pressure on your feet.';
+      recommendationTitle = 'Reduce Pressure';
+      recommendationDescription = 'Rest your feet';
+      instructions = 'Sit down and elevate your feet for 15-20 minutes. Consider changing to more comfortable footwear.';
+    } else if (isAbnormalTemp) {
       category = RiskCategory.temperature;
       title = 'Temperature Alert';
-      shortDescription = 'Abnormal foot temperature detected';
+      shortDescription = 'Unusual temperature on $footSide foot';
       detailedExplanation = 
-          'Your smart insole has detected an abnormal temperature '
-          '(${temperatureValue.toStringAsFixed(1)}°C) in your $footSide foot.\n\n'
-          'Temperature changes can indicate inflammation, infection, or circulation issues. '
-          'Monitoring and appropriate action is important.';
-      recommendationTitle = 'Temperature Management';
-      recommendationDescription = 'Apply appropriate thermal care';
+          'Your smart insole detected an unusual temperature '
+          '(${temperatureValue.toStringAsFixed(1)}°C) on your $footSide foot.\n\n'
+          'This may be due to various factors. Check your foot for any discomfort.';
+      recommendationTitle = 'Check Your Foot';
+      recommendationDescription = 'Inspect for any issues';
       instructions = temperatureValue > 37.5 
-          ? 'Apply a cool compress to your foot for 10-15 minutes. Avoid ice directly on skin.'
-          : 'Warm your feet gently and wear warm socks. Check for signs of poor circulation.';
-    } else if (isMediumPressure) {
-      riskLevel = RiskLevel.medium;
-      category = RiskCategory.pressure;
-      title = 'Elevated Pressure Notice';
-      shortDescription = 'Moderate pressure on $footSide foot';
-      detailedExplanation = 
-          'Your smart insole has detected moderately elevated pressure '
-          '(${pressureValue.toStringAsFixed(1)} units) on your $footSide foot.\n\n'
-          'While not immediately critical, continued elevated pressure should be monitored. '
-          'Consider taking regular breaks when standing.';
-      recommendationTitle = 'Monitor Pressure';
-      recommendationDescription = 'Take periodic rest breaks';
-      instructions = 'Take a 5-10 minute break every hour if standing. Check shoe fit and consider cushioned insoles.';
-    } else if (isMediumTemp) {
-      riskLevel = RiskLevel.medium;
-      category = RiskCategory.temperature;
-      title = 'Temperature Notice';
-      shortDescription = 'Slight temperature variation detected';
-      detailedExplanation = 
-          'Your smart insole has detected a slight temperature variation '
-          '(${temperatureValue.toStringAsFixed(1)}°C) in your $footSide foot.\n\n'
-          'Minor temperature changes can occur naturally but should be monitored. '
-          'Note if the variation persists.';
-      recommendationTitle = 'Monitor Temperature';
-      recommendationDescription = 'Keep track of temperature changes';
-      instructions = 'Monitor your foot temperature over the next few hours. Note any persistent changes or accompanying symptoms.';
+          ? 'Check your foot for any redness or swelling. Rest in a cool area.'
+          : 'Keep your feet warm and check for any signs of cold or numbness.';
     } else {
-      riskLevel = RiskLevel.low;
+      // Normal reading - create a simple status update
       category = RiskCategory.general;
-      title = 'Foot Health Update';
-      shortDescription = 'Routine monitoring update';
+      title = 'Foot Status';
+      shortDescription = 'Normal readings recorded';
       detailedExplanation = 
-          'Your smart insole has recorded your current foot status:\n'
-          '- Pressure: ${pressureValue.toStringAsFixed(1)} units\n'
-          '- Temperature: ${temperatureValue.toStringAsFixed(1)}°C\n\n'
-          'All readings are within normal ranges. Continue with your regular foot care routine.';
-      recommendationTitle = 'Continue Regular Care';
-      recommendationDescription = 'Maintain your foot care routine';
-      instructions = 'Continue with your daily foot inspections and moisturizing routine.';
+          'Your foot readings are within normal range:\n'
+          '• Pressure: ${pressureValue.toStringAsFixed(1)} units\n'
+          '• Temperature: ${temperatureValue.toStringAsFixed(1)}°C';
+      recommendationTitle = 'Continue as Usual';
+      recommendationDescription = 'Keep up your foot care routine';
+      instructions = 'Continue with your regular activities and foot care.';
     }
 
+    // Note: riskLevel is kept for backward compatibility but not used in UI
     return SmartAlert(
       id: id,
       title: title,
       shortDescription: shortDescription,
       detailedExplanation: detailedExplanation,
-      riskLevel: riskLevel,
+      riskLevel: (isAbnormalPressure || isAbnormalTemp) ? RiskLevel.high : RiskLevel.low,
       category: category,
       timestamp: DateTime.now(),
       patientId: patientId,

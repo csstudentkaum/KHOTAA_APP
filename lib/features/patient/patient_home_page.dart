@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dashboard_screen.dart';
 import 'connect_insole_screen.dart';
 import 'preventive_recommendations_screen.dart';
@@ -25,6 +26,7 @@ class _PatientHomePageState extends State<PatientHomePage>
     with SingleTickerProviderStateMixin {
   int _currentTipIndex = 0;
   int _selectedNavIndex = 0;
+  String _userName = 'User'; // Default name
 
   final List<String> _tips = [
     'Wear comfortable shoes to prevent foot injuries',
@@ -40,6 +42,7 @@ class _PatientHomePageState extends State<PatientHomePage>
   @override
   void initState() {
     super.initState();
+    _loadUserName();
     _emergencyButtonController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -61,10 +64,26 @@ class _PatientHomePageState extends State<PatientHomePage>
   }
 
   Future<void> _initializeAlertService() async {
-    // Initialize with a patient ID (in production, get from auth service)
-    await AlertService().initialize('patient_001');
-    // Add sample alerts for demo
-    await AlertService().addSampleAlerts();
+    try {
+      // Initialize with a patient ID (in production, get from auth service)
+      await AlertService().initialize('patient_001');
+      // Add sample alerts for demo
+      await AlertService().addSampleAlerts();
+    } catch (e) {
+      debugPrint('Error initializing alert service: $e');
+    }
+  }
+
+  void _loadUserName() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      setState(() {
+        // Use displayName if available, otherwise extract from email or use phone
+        _userName = user.displayName ?? 
+                    user.email?.split('@').first ?? 
+                    'User';
+      });
+    }
   }
 
   void _handleNotificationTap(SmartAlert alert) {
@@ -293,9 +312,9 @@ class _PatientHomePageState extends State<PatientHomePage>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'Hi Sara Alsalmi!',
-          style: TextStyle(
+        Text(
+          'Hi $_userName!',
+          style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
             color: Color(0xFF1A1A2E),
