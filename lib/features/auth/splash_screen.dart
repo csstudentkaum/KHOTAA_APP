@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../app/app_theme.dart';
+import '../../services/firebase/auth_service.dart';
 import '../../shared/widgets/khotaa_logo.dart';
 
 /// Splash screen — teal background with the KHOTAA logo.
-/// Auto-navigates after 2.5 s: if logged in → appropriate home, else → login.
+/// Auto-navigates after 2.5 s: if logged in → appropriate home based on role, else → login.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -17,6 +17,7 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  final _authService = AuthService();
 
   @override
   void initState() {
@@ -38,18 +39,26 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _navigateAfterDelay() async {
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user != null) {
-      // Sign out stale session without awaiting network
-      FirebaseAuth.instance.signOut();
+    if (_authService.isLoggedIn) {
+      // Determine role and navigate to the correct home
+      try {
+        final role = await _authService.getCurrentUserRole();
+        if (!mounted) return;
+        if (role == 'doctor') {
+          Navigator.pushReplacementNamed(context, '/doctor-home');
+        } else {
+          Navigator.pushReplacementNamed(context, '/patient-home');
+        }
+      } catch (_) {
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } else {
+      Navigator.pushReplacementNamed(context, '/login');
     }
-
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/login');
   }
 
   @override

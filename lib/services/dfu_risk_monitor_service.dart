@@ -79,6 +79,7 @@ class DFURiskMonitorService {
     final temperature = (data['temperature'] ?? 0).toDouble();
 
     // Check if this patient belongs to this doctor
+    // Either via assigned doctorId OR via active/followUp consultation
     final patientDoc = await _firestore
         .collection('users')
         .doc(patientId)
@@ -88,8 +89,22 @@ class DFURiskMonitorService {
     final patientData = patientDoc.data() as Map<String, dynamic>;
     final assignedDoctor = patientData['doctorId'] as String? ?? '';
 
-    // Only alert if this patient is assigned to the doctor
-    if (assignedDoctor != doctorID) return;
+    bool isMyPatient = assignedDoctor == doctorID;
+
+    // Also check if this patient has an active or follow-up consultation
+    // with this doctor
+    if (!isMyPatient) {
+      final consultationSnap = await _firestore
+          .collection('consultations')
+          .where('doctorID', isEqualTo: doctorID)
+          .where('patientID', isEqualTo: patientId)
+          .where('status', whereIn: ['active', 'followUp'])
+          .limit(1)
+          .get();
+      isMyPatient = consultationSnap.docs.isNotEmpty;
+    }
+
+    if (!isMyPatient) return;
 
     final firstName = patientData['firstName'] ?? '';
     final lastName = patientData['lastName'] ?? '';

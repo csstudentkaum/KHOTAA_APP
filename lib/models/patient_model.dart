@@ -60,7 +60,7 @@ class PatientModel extends UserModel {
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
-      age: data['age'],
+      age: (data['age'] as num?)?.toInt(),
       gender: data['gender'],
       phone: data['phone'] ?? '',
       password: data['password'],
@@ -89,7 +89,7 @@ class PatientModel extends UserModel {
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
-      age: data['age'],
+      age: (data['age'] as num?)?.toInt(),
       gender: data['gender'],
       phone: data['phone'] ?? '',
       password: data['password'],

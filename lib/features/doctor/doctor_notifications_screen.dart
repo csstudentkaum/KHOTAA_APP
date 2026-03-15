@@ -25,6 +25,9 @@ class _DoctorNotificationsScreenState extends State<DoctorNotificationsScreen>
     'booking_rejected',
     'booking_completed',
     'booking_cancelled',
+    'booking_confirmed',
+    'follow_up_started',
+    'follow_up_completed',
   ];
 
   // Risk alert notification types
@@ -57,15 +60,18 @@ class _DoctorNotificationsScreenState extends State<DoctorNotificationsScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Notifications',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.primary,
             fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontSize: 24,
           ),
         ),
         centerTitle: true,
@@ -182,8 +188,8 @@ class _DoctorNotificationsScreenState extends State<DoctorNotificationsScreen>
             fontSize: 14,
           ),
           tabs: const [
-            Tab(text: 'Bookings'),
-            Tab(text: 'Patient Alerts'),
+            Tab(child: Text('Bookings')),
+            Tab(child: Text('Patient Alerts')),
           ],
         ),
       ),
@@ -192,7 +198,7 @@ class _DoctorNotificationsScreenState extends State<DoctorNotificationsScreen>
           : TabBarView(
               controller: _tabController,
               children: [
-                _NotificationList(
+                _BookingsTab(
                   userID: user.uid,
                   filterTypes: _bookingTypes,
                   emptyIcon: Icons.calendar_today_outlined,
@@ -200,7 +206,7 @@ class _DoctorNotificationsScreenState extends State<DoctorNotificationsScreen>
                   emptySubtitle:
                       'Booking updates will appear here\nwhen patients book consultations',
                 ),
-                _NotificationList(
+                _BookingsTab(
                   userID: user.uid,
                   filterTypes: _alertTypes,
                   emptyIcon: Icons.monitor_heart_outlined,
@@ -214,16 +220,16 @@ class _DoctorNotificationsScreenState extends State<DoctorNotificationsScreen>
   }
 }
 
-// ─── Filtered notification list ──────────────────────────────────────
+// ─── Unified notification list ───────────────────────────────────────
 
-class _NotificationList extends StatelessWidget {
+class _BookingsTab extends StatelessWidget {
   final String userID;
   final List<String> filterTypes;
   final IconData emptyIcon;
   final String emptyTitle;
   final String emptySubtitle;
 
-  const _NotificationList({
+  const _BookingsTab({
     required this.userID,
     required this.filterTypes,
     required this.emptyIcon,
@@ -246,14 +252,42 @@ class _NotificationList extends StatelessWidget {
           );
         }
 
-        // Filter by type
         final docs = (snapshot.data?.docs ?? []).where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           return filterTypes.contains(data['type']);
         }).toList();
 
         if (docs.isEmpty) {
-          return _buildEmptyState();
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  emptyIcon,
+                  size: 64,
+                  color: AppColors.textHint.withAlpha(100),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  emptyTitle,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  emptySubtitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
+            ),
+          );
         }
 
         return ListView.separated(
@@ -268,35 +302,9 @@ class _NotificationList extends StatelessWidget {
       },
     );
   }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(emptyIcon, size: 64, color: AppColors.textHint.withAlpha(100)),
-          const SizedBox(height: 16),
-          Text(
-            emptyTitle,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            emptySubtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: AppColors.textHint),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-// ─── Notification card ───────────────────────────────────────────────
+// ─── Notification card (matches patient design) ──────────────────────
 
 class _NotificationCard extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -312,7 +320,7 @@ class _NotificationCard extends StatelessWidget {
     final notificationID = data['notificationID'] ?? '';
     final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
 
-    final (icon, iconColor) = _iconFor(type);
+    final (icon, iconColor, accentColor) = _styleFor(type);
 
     return GestureDetector(
       onTap: () {
@@ -321,112 +329,184 @@ class _NotificationCard extends StatelessWidget {
         }
       },
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isRead ? Colors.white : AppColors.primary.withAlpha(12),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isRead
-                ? AppColors.inputBorder
-                : AppColors.primary.withAlpha(40),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconColor.withAlpha(25),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: isRead
-                                ? FontWeight.w500
-                                : FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      if (!isRead)
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    body,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      height: 1.4,
-                    ),
-                  ),
-                  if (createdAt != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _formatTime(createdAt),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textHint,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+          border: Border.all(color: AppColors.inputBorder.withAlpha(80)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(8),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      body,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        if (createdAt != null) ...[
+                          const Icon(
+                            Icons.access_time,
+                            size: 12,
+                            color: AppColors.textHint,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatTime(createdAt),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                        ],
+                        const Spacer(),
+                        const Text(
+                          'View >',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textHint,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  (IconData, Color) _iconFor(String type) {
+  (IconData, Color, Color) _styleFor(String type) {
     switch (type) {
+      // Booking types
       case 'new_booking':
-        return (Icons.calendar_today, AppColors.primary);
+        return (
+          Icons.calendar_month_rounded,
+          AppColors.primary,
+          AppColors.primary,
+        );
       case 'booking_accepted':
-        return (Icons.check_circle_outline, const Color(0xFF22C55E));
+        return (
+          Icons.calendar_month_rounded,
+          const Color(0xFF22C55E),
+          const Color(0xFF22C55E),
+        );
       case 'booking_rejected':
-        return (Icons.cancel_outlined, Colors.red);
+        return (
+          Icons.calendar_month_rounded,
+          const Color(0xFFEF4444),
+          const Color(0xFFEF4444),
+        );
       case 'booking_completed':
-        return (Icons.task_alt, const Color(0xFF6366F1));
+        return (
+          Icons.calendar_month_rounded,
+          AppColors.primary,
+          AppColors.primary,
+        );
       case 'booking_cancelled':
-        return (Icons.event_busy, const Color(0xFFEF4444));
+        return (
+          Icons.calendar_month_rounded,
+          const Color(0xFFEF4444),
+          const Color(0xFFEF4444),
+        );
+      case 'booking_confirmed':
+        return (
+          Icons.calendar_month_rounded,
+          const Color(0xFF22C55E),
+          const Color(0xFF22C55E),
+        );
+      case 'follow_up_started':
+        return (
+          Icons.calendar_month_rounded,
+          AppColors.primary,
+          AppColors.primary,
+        );
+      case 'follow_up_completed':
+        return (
+          Icons.calendar_month_rounded,
+          AppColors.primary,
+          AppColors.primary,
+        );
+      // Alert types
       case 'high_pressure':
-        return (Icons.warning_amber_rounded, const Color(0xFFEF4444));
+        return (
+          Icons.warning_amber_rounded,
+          const Color(0xFFEF4444),
+          const Color(0xFFEF4444),
+        );
       case 'elevated_pressure':
-        return (Icons.speed, const Color(0xFFF59E0B));
+        return (Icons.speed, const Color(0xFFF59E0B), const Color(0xFFF59E0B));
       case 'abnormal_temperature':
-        return (Icons.thermostat, const Color(0xFFEF4444));
+        return (
+          Icons.thermostat,
+          const Color(0xFFEF4444),
+          const Color(0xFFEF4444),
+        );
       case 'elevated_temperature':
-        return (Icons.thermostat_outlined, const Color(0xFFF59E0B));
+        return (
+          Icons.thermostat_outlined,
+          const Color(0xFFF59E0B),
+          const Color(0xFFF59E0B),
+        );
       default:
-        return (Icons.notifications_outlined, AppColors.primary);
+        return (
+          Icons.notifications_outlined,
+          AppColors.primary,
+          AppColors.primary,
+        );
     }
   }
 
-  String _formatTime(DateTime dateTime) {
+  static String _formatTime(DateTime dateTime) {
     final now = DateTime.now();
     final diff = now.difference(dateTime);
 

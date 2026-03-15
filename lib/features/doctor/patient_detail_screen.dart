@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../app/app_theme.dart';
-import 'image_review_screen.dart';
-import 'treatment_plan_screen.dart';
+import '../patient/weekly_report_screen.dart';
 import 'patient_medical_records_screen.dart';
 
 class PatientDetailScreen extends StatefulWidget {
@@ -19,18 +18,57 @@ class PatientDetailScreen extends StatefulWidget {
   State<PatientDetailScreen> createState() => _PatientDetailScreenState();
 }
 
-class _PatientDetailScreenState extends State<PatientDetailScreen> {
-  int _selectedFoot = 0; // 0 = Left, 1 = Right
+class _PatientDetailScreenState extends State<PatientDetailScreen>
+    with TickerProviderStateMixin {
+  bool _hasRecentData = false;
+
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9F8),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Patient Dashboard'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Patient Dashboard',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+          ),
+        ),
+        centerTitle: true,
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
@@ -55,6 +93,54 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           final gender = userData['gender'] ?? 'N/A';
           final riskLevel = userData['riskLevel'] ?? 'Moderate';
 
+          // ── Insole monitoring status (written by patient dashboard) ──
+          final insoleStatus =
+              userData['insoleStatus'] as Map<String, dynamic>? ?? {};
+          final bool insoleConnected = insoleStatus['connected'] == true;
+          final bool insoleMonitoring = insoleStatus['monitoring'] == true;
+          // Check if the last heartbeat was recent (within 2 minutes)
+          DateTime? insoleLastActive;
+          if (insoleStatus['lastActive'] != null) {
+            insoleLastActive = (insoleStatus['lastActive'] as Timestamp)
+                .toDate();
+          }
+          final bool isRecentHeartbeat =
+              insoleLastActive != null &&
+              DateTime.now().difference(insoleLastActive).inMinutes < 2;
+          final bool isPatientMonitoringActive =
+              insoleMonitoring && isRecentHeartbeat;
+
+          // Live values from patient dashboard heartbeat
+          final double liveTemperature = (insoleStatus['temperature'] ?? 0)
+              .toDouble();
+          final double livePressure = (insoleStatus['pressure'] ?? 0)
+              .toDouble();
+          final int liveSteps = (insoleStatus['stepsToday'] ?? 0) is int
+              ? (insoleStatus['stepsToday'] ?? 0) as int
+              : (insoleStatus['stepsToday'] ?? 0).toInt();
+          final int liveWearingMinutes =
+              (insoleStatus['wearingMinutes'] ?? 0) is int
+              ? (insoleStatus['wearingMinutes'] ?? 0) as int
+              : (insoleStatus['wearingMinutes'] ?? 0).toInt();
+
+          // Live foot pressure data from patient dashboard
+          List<double> liveLeftFootPressure = [];
+          List<double> liveRightFootPressure = [];
+          if (insoleStatus['leftFootPressure'] != null) {
+            liveLeftFootPressure = List<double>.from(
+              (insoleStatus['leftFootPressure'] as List).map(
+                (e) => (e as num).toDouble(),
+              ),
+            );
+          }
+          if (insoleStatus['rightFootPressure'] != null) {
+            liveRightFootPressure = List<double>.from(
+              (insoleStatus['rightFootPressure'] as List).map(
+                (e) => (e as num).toDouble(),
+              ),
+            );
+          }
+
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('dfu_readings')
@@ -66,8 +152,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
               // Defaults
               double pressure = 0;
               double temperature = 0;
-              String pressureStatus = 'No data';
-              String temperatureStatus = 'No data';
+              int stepsToday = 0;
+              int wearingMinutes = 0;
               String lastReadingTime = 'No readings yet';
               List<double> leftPressurePoints = List.filled(6, 0);
               List<double> rightPressurePoints = List.filled(6, 0);
@@ -77,18 +163,19 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                     readingSnap.data!.docs.first.data() as Map<String, dynamic>;
                 pressure = (rData['pressure'] ?? 0).toDouble();
                 temperature = (rData['temperature'] ?? 0).toDouble();
-                pressureStatus = _getPressureStatus(pressure);
-                temperatureStatus = _getTemperatureStatus(temperature);
 
                 if (rData['timestamp'] != null) {
                   final ts = (rData['timestamp'] as dynamic).toDate();
                   final diff = DateTime.now().difference(ts);
                   if (diff.inMinutes < 60) {
                     lastReadingTime = '${diff.inMinutes} min ago';
+                    _hasRecentData = true;
                   } else if (diff.inHours < 24) {
                     lastReadingTime = '${diff.inHours}h ago';
+                    _hasRecentData = diff.inHours < 2;
                   } else {
                     lastReadingTime = '${diff.inDays}d ago';
+                    _hasRecentData = false;
                   }
                 }
 
@@ -106,219 +193,169 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                     ),
                   );
                 }
+
+                stepsToday = (rData['stepsToday'] ?? 0) is int
+                    ? (rData['stepsToday'] ?? 0) as int
+                    : (rData['stepsToday'] ?? 0).toInt();
+                wearingMinutes = (rData['wearingMinutes'] ?? 0) is int
+                    ? (rData['wearingMinutes'] ?? 0) as int
+                    : (rData['wearingMinutes'] ?? 0).toInt();
               }
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Patient Info Card ──
-                    _buildPatientInfoCard(
+              // Use live insole data if patient is actively monitoring,
+              // otherwise fall back to last Firestore reading.
+              final double displayTemperature =
+                  isPatientMonitoringActive && liveTemperature > 0
+                  ? liveTemperature
+                  : temperature;
+              final double displayPressure =
+                  isPatientMonitoringActive && livePressure > 0
+                  ? livePressure
+                  : pressure;
+              final int displaySteps =
+                  isPatientMonitoringActive && liveSteps > 0
+                  ? liveSteps
+                  : stepsToday;
+              final int displayWearing =
+                  isPatientMonitoringActive && liveWearingMinutes > 0
+                  ? liveWearingMinutes
+                  : wearingMinutes;
+
+              // Use live foot pressure data when monitoring is active
+              final List<double> displayLeftPoints =
+                  isPatientMonitoringActive && liveLeftFootPressure.isNotEmpty
+                  ? liveLeftFootPressure
+                  : leftPressurePoints;
+              final List<double> displayRightPoints =
+                  isPatientMonitoringActive && liveRightFootPressure.isNotEmpty
+                  ? liveRightFootPressure
+                  : rightPressurePoints;
+
+              // Override last reading time if live monitoring is active
+              final String displayLastReading = isPatientMonitoringActive
+                  ? 'Live now'
+                  : lastReadingTime;
+
+              return Column(
+                children: [
+                  // ── Patient Info Card (always visible above tabs) ──
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                    child: _buildPatientInfoCard(
                       fullName: fullName,
                       initials: initials,
                       age: age,
                       gender: gender,
                       riskLevel: riskLevel,
-                      lastReadingTime: lastReadingTime,
+                      lastReadingTime: displayLastReading,
                     ),
-                    const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 16),
 
-                    // ── Medical Information Section ──
-                    _buildMedicalInfoSection(userData),
-                    const SizedBox(height: 12),
-
-                    // ── View Complete Medical Records ──
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PatientMedicalRecordsScreen(
-                                patientId: widget.patientId,
-                                patientName: fullName,
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.folder_open_outlined, size: 18),
-                        label: const Text('View Complete Medical Records'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                  // ── Tab Bar ──
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicator: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      labelStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      dividerColor: Colors.transparent,
+                      tabs: const [
+                        Tab(text: 'Monitoring'),
+                        Tab(text: 'Patient Info'),
+                      ],
                     ),
-                    const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 16),
 
-                    // ── Chat & Call Buttons ──
-                    Row(
+                  // ── Tab Content ──
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
                       children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Chat feature coming soon'),
-                                  backgroundColor: AppColors.primary,
-                                ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.chat_bubble_outline,
-                              size: 18,
-                            ),
-                            label: const Text('Chat'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                        // ═══ TAB 1: Monitoring ═══
+                        SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Alert Banner
+                              _buildAlertBanner(
+                                pressure: displayPressure,
+                                temperature: displayTemperature,
                               ),
-                            ),
+
+                              // Live Status
+                              _buildLiveStatusSection(
+                                riskLevel: riskLevel,
+                                isPatientMonitoringActive:
+                                    isPatientMonitoringActive,
+                                insoleConnected: insoleConnected,
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Real-Time Metrics
+                              _buildRealTimeMetrics(
+                                pressure: displayPressure,
+                                temperature: displayTemperature,
+                                stepsToday: displaySteps,
+                                wearingMinutes: displayWearing,
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Foot Visualization
+                              _buildFootVisualization(
+                                leftPoints: displayLeftPoints,
+                                rightPoints: displayRightPoints,
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Weekly Report
+                              _buildWeeklyReportButton(),
+                              const SizedBox(height: 24),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Call feature coming soon'),
-                                  backgroundColor: AppColors.primary,
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.phone_outlined, size: 18),
-                            label: const Text('Call'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
+
+                        // ═══ TAB 2: Patient Info ═══
+                        SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Medical Information
+                              _buildMedicalInfoSection(userData),
+                              const SizedBox(height: 16),
+
+                              // Medical Records Button
+                              _buildMedicalRecordsButton(fullName),
+                              const SizedBox(height: 24),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-
-                    // ── Section Title: Recent Readings ──
-                    const Text(
-                      'Recent Readings',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // ── Pressure & Temperature Cards ──
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildReadingCard(
-                            title: 'Pressure',
-                            value: pressure > 0
-                                ? '${pressure.toStringAsFixed(0)} kPa'
-                                : '-- kPa',
-                            status: pressureStatus,
-                            statusColor: _getPressureColor(pressure),
-                            icon: Icons.speed_outlined,
-                            iconBg: const Color(0xFFEBF5FF),
-                            iconColor: const Color(0xFF3B82F6),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildReadingCard(
-                            title: 'Temperature',
-                            value: temperature > 0
-                                ? '${temperature.toStringAsFixed(1)} °C'
-                                : '-- °C',
-                            status: temperatureStatus,
-                            statusColor: _getTemperatureColor(temperature),
-                            icon: Icons.thermostat_outlined,
-                            iconBg: const Color(0xFFFFF7ED),
-                            iconColor: const Color(0xFFF97316),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // ── Foot Pressure Map ──
-                    const Text(
-                      'Foot Pressure Map',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildFootPressureMap(
-                      leftPoints: leftPressurePoints,
-                      rightPoints: rightPressurePoints,
-                    ),
-                    const SizedBox(height: 20),
-
-                    // ── Quick Actions ──
-                    const Text(
-                      'Quick Actions',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildQuickActionTile(
-                      icon: Icons.image_search_outlined,
-                      title: 'Foot Images',
-                      subtitle: 'Review uploaded foot images',
-                      color: const Color(0xFF22C55E),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ImageReviewScreen(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildQuickActionTile(
-                      icon: Icons.medical_information_outlined,
-                      title: 'Treatment Plan',
-                      subtitle: 'Manage treatment plan',
-                      color: const Color(0xFF6366F1),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const TreatmentPlanScreen(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildQuickActionTile(
-                      icon: Icons.history_outlined,
-                      title: 'Appointment History',
-                      subtitle: 'View past appointments',
-                      color: AppColors.primary,
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           );
@@ -456,6 +493,64 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  Weekly Report Button (same as patient dashboard_screen)
+  // ══════════════════════════════════════════════════════════════════
+  Widget _buildWeeklyReportButton() {
+    return Container(
+      width: double.infinity,
+      height: 60,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xFF64ADB3), Color(0xFF4D9DA3)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF64ADB3).withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const WeeklyReportScreen()),
+            );
+          },
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.assessment_rounded, color: Colors.white, size: 26),
+                SizedBox(width: 12),
+                Text(
+                  'View Weekly Report',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                SizedBox(width: 8),
+                Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -695,60 +790,527 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
+  // ══════════════════════════════════════════════════════════════════
+  //  Alert Banner — matches patient dashboard_screen
+  // ══════════════════════════════════════════════════════════════════
+  Widget _buildAlertBanner({
+    required double pressure,
+    required double temperature,
   }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: color.withAlpha(20),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withAlpha(50)),
+    final bool abnormalPressure = pressure > 80;
+    final bool abnormalTemp =
+        temperature > 35 || (temperature > 0 && temperature < 30.5);
+    final bool hasAbnormal = abnormalPressure || abnormalTemp;
+
+    if (!hasAbnormal) return const SizedBox.shrink();
+
+    String message;
+    if (abnormalPressure && abnormalTemp) {
+      message =
+          'Abnormal pressure and temperature detected. Please check the patient\'s foot.';
+    } else if (abnormalPressure) {
+      message =
+          'Abnormal pressure detected. Please check the patient\'s foot or reduce pressure.';
+    } else {
+      message =
+          'Abnormal temperature detected. Please check the patient\'s foot.';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFCC02), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color,
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFCC02).withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.info_outline,
+              color: Color(0xFFF57C00),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Attention Needed',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFF57C00),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildReadingCard({
-    required String title,
-    required String value,
-    required String status,
-    required Color statusColor,
-    required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
+  // ══════════════════════════════════════════════════════════════════
+  //  Live Status Section (dashboard_screen style)
+  // ══════════════════════════════════════════════════════════════════
+  Widget _buildLiveStatusSection({
+    required String riskLevel,
+    required bool isPatientMonitoringActive,
+    required bool insoleConnected,
   }) {
+    // Use real-time insole status from patient's Firestore heartbeat.
+    // Fall back to _hasRecentData only when patient hasn't written status yet.
+    final bool isConnected = isPatientMonitoringActive || _hasRecentData;
+    final bool isMonitoring = isPatientMonitoringActive;
+
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+    switch (riskLevel.toLowerCase()) {
+      case 'high':
+        statusColor = const Color(0xFFF57C00);
+        statusText = 'Needs Attention';
+        statusIcon = Icons.info_outline;
+        break;
+      case 'moderate':
+        statusColor = const Color(0xFFF59E0B);
+        statusText = 'Moderate Risk';
+        statusIcon = Icons.show_chart;
+        break;
+      default:
+        statusColor = const Color(0xFF4CAF50);
+        statusText = 'Normal';
+        statusIcon = Icons.check_circle_outline;
+    }
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, Colors.white.withOpacity(0.95)],
+        ),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color:
+                            (isConnected
+                                    ? const Color(0xFF4CAF50)
+                                    : const Color(0xFFE53935))
+                                .withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        isConnected
+                            ? Icons.bluetooth_connected
+                            : Icons.bluetooth_disabled,
+                        color: isConnected
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFFE53935),
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Insole',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isConnected ? 'Connected' : 'Offline',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isConnected
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFFE53935),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                height: 50,
+                width: 1,
+                color: Colors.grey.withOpacity(0.2),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) {
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4CAF50).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: isMonitoring
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(0xFF4CAF50)
+                                          .withOpacity(
+                                            0.3 * _pulseAnimation.value,
+                                          ),
+                                      blurRadius: 15 * _pulseAnimation.value,
+                                      spreadRadius: 2 * _pulseAnimation.value,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Icon(
+                            Icons.monitor_heart,
+                            color: isMonitoring
+                                ? const Color(0xFF4CAF50)
+                                : Colors.grey,
+                            size: 28,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Monitoring',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (isMonitoring) ...[
+                          AnimatedBuilder(
+                            animation: _pulseAnimation,
+                            builder: (context, child) {
+                              return Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4CAF50),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF4CAF50)
+                                          .withOpacity(
+                                            0.5 * _pulseAnimation.value,
+                                          ),
+                                      blurRadius: 6 * _pulseAnimation.value,
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(
+                          isMonitoring ? 'Active' : 'Inactive',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isMonitoring
+                                ? const Color(0xFF4CAF50)
+                                : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Status Indicator
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  statusColor.withOpacity(0.1),
+                  statusColor.withOpacity(0.05),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: statusColor.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Foot Status',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  Real-Time Metrics (dashboard_screen style — 4 cards)
+  // ══════════════════════════════════════════════════════════════════
+  Widget _buildRealTimeMetrics({
+    required double pressure,
+    required double temperature,
+    required int stepsToday,
+    required int wearingMinutes,
+  }) {
+    final pColor = _getPressureColor(pressure);
+    final tColor = _getTemperatureColor(temperature);
+
+    // Format steps
+    String stepsValue;
+    if (stepsToday > 0) {
+      if (stepsToday >= 1000) {
+        stepsValue = '${(stepsToday / 1000).toStringAsFixed(1)}k';
+      } else {
+        stepsValue = stepsToday.toString();
+      }
+    } else {
+      stepsValue = '--';
+    }
+
+    // Format wearing time
+    String wearingValue;
+    if (wearingMinutes > 0) {
+      final hours = wearingMinutes ~/ 60;
+      final mins = wearingMinutes % 60;
+      if (hours > 0) {
+        wearingValue = '${hours}h ${mins}m';
+      } else {
+        wearingValue = '${mins}m';
+      }
+    } else {
+      wearingValue = '--';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Real-Time Metrics',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1A1A2E),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                icon: Icons.thermostat_rounded,
+                label: 'Temperature',
+                value: temperature > 0
+                    ? '${temperature.toStringAsFixed(1)}°C'
+                    : '-- °C',
+                color: tColor,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildMetricCard(
+                icon: Icons.compress_rounded,
+                label: 'Avg Pressure',
+                value: pressure > 0
+                    ? '${pressure.toStringAsFixed(0)} kPa'
+                    : '-- kPa',
+                color: pColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                icon: Icons.directions_walk_rounded,
+                label: 'Steps Today',
+                value: stepsValue,
+                color: const Color(0xFF5C6BC0),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildMetricCard(
+                icon: Icons.timer_rounded,
+                label: 'Wearing Time',
+                value: wearingValue,
+                color: const Color(0xFF26A69A),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetricCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, Colors.white],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  Foot Visualization (same design as patient dashboard_screen)
+  // ══════════════════════════════════════════════════════════════════
+  Widget _buildFootVisualization({
+    required List<double> leftPoints,
+    required List<double> rightPoints,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -756,101 +1318,71 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              const Text(
+                'Foot Visualization',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
               Container(
-                width: 36,
-                height: 36,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFF64ADB3).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF64ADB3),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Real-time',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64ADB3),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: statusColor.withAlpha(20),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: statusColor,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFootPressureMap({
-    required List<double> leftPoints,
-    required List<double> rightPoints,
-  }) {
-    final points = _selectedFoot == 0 ? leftPoints : rightPoints;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
+          const SizedBox(height: 24),
+          // Both feet side by side
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _footToggle('Left Foot', 0),
-              const SizedBox(width: 8),
-              _footToggle('Right Foot', 1),
+              _buildSimpleFoot(label: 'Left Foot', pressureValues: leftPoints),
+              _buildSimpleFoot(
+                label: 'Right Foot',
+                pressureValues: rightPoints,
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 260,
-            child: CustomPaint(
-              size: const Size(160, 260),
-              painter: FootPressurePainter(points: points),
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
+          // Legend
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legendDot(const Color(0xFF22C55E), 'Normal'),
-              const SizedBox(width: 16),
-              _legendDot(const Color(0xFFF59E0B), 'Elevated'),
-              const SizedBox(width: 16),
-              _legendDot(const Color(0xFFEF4444), 'High'),
+              _legendDot(const Color(0xFF4CAF50), 'Low'),
+              const SizedBox(width: 20),
+              _legendDot(const Color(0xFFFFA726), 'Medium'),
+              const SizedBox(width: 20),
+              _legendDot(const Color(0xFFE53935), 'High'),
             ],
           ),
         ],
@@ -858,126 +1390,200 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     );
   }
 
-  Widget _footToggle(String label, int index) {
-    final selected = _selectedFoot == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedFoot = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: selected ? AppColors.primary : AppColors.inputBorder,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : AppColors.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildSimpleFoot({
+    required String label,
+    required List<double> pressureValues,
+  }) {
+    // Calculate average pressure to determine status
+    final nonZero = pressureValues.where((v) => v > 0).toList();
+    final avgPressure = nonZero.isNotEmpty
+        ? nonZero.reduce((a, b) => a + b) / nonZero.length
+        : 0.0;
 
-  Widget _legendDot(Color color, String label) {
-    return Row(
+    // Detect scale: if max value <= 1.0 it's 0–1 normalized (from patient dashboard),
+    // otherwise it's in kPa (from dfu_readings).
+    final maxVal = pressureValues.isNotEmpty
+        ? pressureValues.reduce((a, b) => a > b ? a : b)
+        : 0.0;
+    final bool isNormalized = maxVal > 0 && maxVal <= 1.0;
+
+    // Determine status & colors using the appropriate thresholds
+    String status;
+    Color mainColor;
+    Color heelColor;
+    IconData statusIcon;
+
+    if (avgPressure <= 0) {
+      status = 'No Data';
+      mainColor = const Color(0xFFF3F4F6);
+      heelColor = const Color(0xFF9CA3AF);
+      statusIcon = Icons.remove_circle_outline;
+    } else if (isNormalized ? avgPressure > 0.7 : avgPressure > 80) {
+      status = 'High Pressure';
+      mainColor = const Color(0xFFFFCDD2);
+      heelColor = const Color(0xFFE53935);
+      statusIcon = Icons.error_outline;
+    } else if (isNormalized ? avgPressure > 0.4 : avgPressure > 60) {
+      status = 'Moderate';
+      mainColor = const Color(0xFFFFF9C4);
+      heelColor = const Color(0xFFFFA726);
+      statusIcon = Icons.show_chart;
+    } else {
+      status = 'Normal';
+      mainColor = const Color(0xFFC8E6C9);
+      heelColor = const Color(0xFF4CAF50);
+      statusIcon = Icons.check_circle_outline;
+    }
+
+    return Column(
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1A1A2E),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Simple foot shape (pill with heel circle)
+        SizedBox(
+          width: 90,
+          height: 160,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Main foot body
+              Container(
+                width: 70,
+                height: 140,
+                decoration: BoxDecoration(
+                  color: mainColor,
+                  borderRadius: BorderRadius.circular(35),
+                ),
+              ),
+              // Heel circle
+              Positioned(
+                bottom: 10,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: heelColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Status label
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(statusIcon, size: 16, color: heelColor),
+            const SizedBox(width: 4),
+            Text(
+              status,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: heelColor,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildQuickActionTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.inputBorder),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(8),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+  Widget _legendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withAlpha(25),
-                borderRadius: BorderRadius.circular(12),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  Medical Records Button (dashboard_screen weekly report style)
+  // ══════════════════════════════════════════════════════════════════
+  Widget _buildMedicalRecordsButton(String fullName) {
+    return Container(
+      width: double.infinity,
+      height: 60,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xFF64ADB3), Color(0xFF4D9DA3)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF64ADB3).withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PatientMedicalRecordsScreen(
+                  patientId: widget.patientId,
+                  patientName: fullName,
+                ),
               ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
+            );
+          },
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.folder_open_outlined, color: Colors.white, size: 24),
+                SizedBox(width: 12),
+                Text(
+                  'View Medical Records',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                SizedBox(width: 8),
+                Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+              ],
             ),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textHint,
-              size: 22,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  String _getPressureStatus(double kPa) {
-    if (kPa <= 0) return 'No data';
-    if (kPa < 60) return 'Normal';
-    if (kPa < 80) return 'Above normal';
-    return 'High risk';
-  }
+  // ── Status helpers ──
 
   Color _getPressureColor(double kPa) {
     if (kPa <= 0) return AppColors.textHint;
@@ -986,104 +1592,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     return const Color(0xFFEF4444);
   }
 
-  String _getTemperatureStatus(double c) {
-    if (c <= 0) return 'No data';
-    if (c < 33) return 'Normal';
-    if (c < 35) return 'Elevated';
-    return 'High';
-  }
-
   Color _getTemperatureColor(double c) {
     if (c <= 0) return AppColors.textHint;
     if (c < 33) return const Color(0xFF22C55E);
     if (c < 35) return const Color(0xFFF59E0B);
     return const Color(0xFFEF4444);
   }
-}
-
-// ── Foot Pressure Custom Painter ──
-class FootPressurePainter extends CustomPainter {
-  final List<double> points;
-
-  FootPressurePainter({required this.points});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-
-    final outlinePaint = Paint()
-      ..color = const Color(0xFFD1D5DB)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    final footPath = Path();
-    footPath.moveTo(cx - 25, 20);
-    footPath.quadraticBezierTo(cx - 35, 0, cx - 15, 0);
-    footPath.quadraticBezierTo(cx, 5, cx + 15, 0);
-    footPath.quadraticBezierTo(cx + 35, 0, cx + 25, 20);
-    footPath.quadraticBezierTo(cx + 40, 50, cx + 38, 80);
-    footPath.quadraticBezierTo(cx + 35, 120, cx + 20, 160);
-    footPath.quadraticBezierTo(cx + 15, 200, cx + 25, 230);
-    footPath.quadraticBezierTo(cx + 28, 250, cx, 255);
-    footPath.quadraticBezierTo(cx - 28, 250, cx - 25, 230);
-    footPath.quadraticBezierTo(cx - 15, 200, cx - 20, 160);
-    footPath.quadraticBezierTo(cx - 35, 120, cx - 38, 80);
-    footPath.quadraticBezierTo(cx - 40, 50, cx - 25, 20);
-    footPath.close();
-
-    final footFill = Paint()
-      ..color = const Color(0xFFF3F4F6)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(footPath, footFill);
-    canvas.drawPath(footPath, outlinePaint);
-
-    final zones = [
-      Offset(cx, 15),
-      Offset(cx - 18, 65),
-      Offset(cx + 18, 65),
-      Offset(cx, 140),
-      Offset(cx - 12, 230),
-      Offset(cx + 12, 230),
-    ];
-
-    for (int i = 0; i < zones.length && i < points.length; i++) {
-      final p = points[i];
-      Color color;
-      if (p <= 0) {
-        color = const Color(0xFFD1D5DB);
-      } else if (p < 60) {
-        color = const Color(0xFF22C55E);
-      } else if (p < 80) {
-        color = const Color(0xFFF59E0B);
-      } else {
-        color = const Color(0xFFEF4444);
-      }
-
-      final zonePaint = Paint()
-        ..color = color.withAlpha(150)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(zones[i], 14, zonePaint);
-
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: p > 0 ? p.toStringAsFixed(0) : '--',
-          style: const TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        zones[i] - Offset(textPainter.width / 2, textPainter.height / 2),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant FootPressurePainter oldDelegate) =>
-      oldDelegate.points != points;
 }

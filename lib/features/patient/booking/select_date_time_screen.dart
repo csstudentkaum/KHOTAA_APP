@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../app/app_theme.dart';
 import '../../../models/doctor_model.dart';
 import '../../../services/consultation_service.dart';
+import '../payment_screen.dart';
 
 /// Select Date and Time screen for booking
 class SelectDateTimeScreen extends StatefulWidget {
@@ -70,8 +71,11 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
 
   /// Check if a date is a working day for this doctor
   bool _isWorkingDay(DateTime date) {
-    if (_workingHours == null) return true; // no custom hours → all days open
     final dayName = _dayNames[date.weekday];
+    if (_workingHours == null) {
+      // Fallback: Sunday–Thursday open, Friday & Saturday closed
+      return dayName != 'Friday' && dayName != 'Saturday';
+    }
     final dayData = _workingHours![dayName] as Map<String, dynamic>?;
     return dayData != null && dayData['enabled'] == true;
   }
@@ -182,102 +186,35 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
         return;
       }
 
-      // Get patient name
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      final patientName = userDoc.exists
-          ? '${userDoc.data()?['firstName'] ?? ''} ${userDoc.data()?['lastName'] ?? ''}'
-          : 'Patient';
-
-      debugPrint(' Booking with patientID (auth uid): ${user.uid}');
-      debugPrint(' Booking with doctorID (doc.id): ${widget.doctor.id}');
-
-      await _consultationService.createConsultation(
-        patientID: user.uid,
-        doctorID: widget.doctor.id,
-        patientName: patientName.trim(),
-        doctorName: 'Dr. ${widget.doctor.firstName} ${widget.doctor.lastName}',
-        consultationDate: _selectedDate,
-        timeSlot: _selectedTimeSlot!,
-      );
-
+      // Navigate to Payment Screen
       if (mounted) {
-        _showSuccessDialog();
+        final doctorFullName =
+            'Dr. ${widget.doctor.firstName} ${widget.doctor.lastName}';
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentScreen(
+              doctor: widget.doctor,
+              doctorName: doctorFullName,
+              date: _formatDate(_selectedDate),
+              time: _selectedTimeSlot!,
+              selectedDate: _selectedDate,
+            ),
+          ),
+        );
       }
     } catch (e) {
-      debugPrint('Error booking: $e');
+      debugPrint('Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to book: $e')));
+        ).showSnackBar(SnackBar(content: Text('Something went wrong: $e')));
       }
     } finally {
       if (mounted) {
         setState(() => _isBooking = false);
       }
     }
-  }
-
-  void _showSuccessDialog() {
-    final navContext = context; // capture page context
-    showDialog(
-      context: navContext,
-      barrierDismissible: false,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.check_circle,
-                color: AppColors.success,
-                size: 60,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Booking Successful!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your appointment with Dr. ${widget.doctor.firstName} has been booked for ${_formatDate(_selectedDate)} at $_selectedTimeSlot',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(dialogCtx); // Close dialog
-                  Navigator.pop(navContext); // Go back to doctor detail
-                  Navigator.pop(navContext); // Go back to doctors list
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Done'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   String _formatDate(DateTime date) {
@@ -306,7 +243,10 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -314,7 +254,7 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.primary,
           ),
         ),
         centerTitle: true,
@@ -567,26 +507,41 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
       );
     }
 
+    final now = DateTime.now();
+    final isToday = _isSameDay(_selectedDate, now);
+
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: _availableSlots.map((slot) {
         final isSelected = _selectedTimeSlot == slot;
+        final isPast = isToday && _isSlotPast(slot, now);
+
         return GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedTimeSlot = slot;
-            });
-          },
+          onTap: isPast
+              ? null
+              : () {
+                  setState(() {
+                    _selectedTimeSlot = slot;
+                  });
+                },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary : Colors.white,
+              color: isPast
+                  ? Colors.grey.shade100
+                  : isSelected
+                  ? AppColors.primary
+                  : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.divider,
+                color: isPast
+                    ? Colors.grey.shade300
+                    : isSelected
+                    ? AppColors.primary
+                    : AppColors.divider,
               ),
-              boxShadow: isSelected
+              boxShadow: isSelected && !isPast
                   ? [
                       BoxShadow(
                         color: AppColors.primary.withOpacity(0.3),
@@ -599,14 +554,44 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
             child: Text(
               slot,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textPrimary,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isPast
+                    ? AppColors.textHint
+                    : isSelected
+                    ? Colors.white
+                    : AppColors.textPrimary,
+                fontWeight: isSelected && !isPast
+                    ? FontWeight.bold
+                    : FontWeight.normal,
               ),
             ),
           ),
         );
       }).toList(),
     );
+  }
+
+  /// Returns true if the given time slot (e.g. "10:00 AM") is before the current time.
+  bool _isSlotPast(String slot, DateTime now) {
+    try {
+      final parts = slot.trim().split(' ');
+      if (parts.length != 2) return false;
+      final timeParts = parts[0].split(':');
+      if (timeParts.length != 2) return false;
+
+      int hour = int.parse(timeParts[0]);
+      final int minute = int.parse(timeParts[1]);
+      final period = parts[1].toUpperCase();
+
+      if (period == 'PM' && hour != 12) hour += 12;
+      if (period == 'AM' && hour == 12) hour = 0;
+
+      final slotMinutes = hour * 60 + minute;
+      final nowMinutes = now.hour * 60 + now.minute;
+
+      return slotMinutes <= nowMinutes;
+    } catch (_) {
+      return false;
+    }
   }
 
   Widget _buildBottomButton() {
@@ -649,7 +634,7 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
                     ),
                   )
                 : const Text(
-                    'Set Appointment',
+                    'Proceed to Payment',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
           ),

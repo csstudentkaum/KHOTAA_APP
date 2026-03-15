@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:khotaa_app/shared/widgets/khotaa_logo.dart';
-import '../../app/app_theme.dart';
-import '../../services/firebase/auth_service.dart';
+import '../../../app/app_theme.dart';
+import '../../../services/firebase/auth_service.dart';
+import '../../../shared/formatters/phone_formatter.dart';
+import '../../../shared/widgets/khotaa_logo.dart';
 
-/// Login screen — Phone number → OTP verification (no password).
+/// Patient Login screen — Phone number → OTP verification (passwordless).
 ///
 /// Flow:
-///   1. User enters phone number
-///   2. OTP is sent to the phone number
-///   3. Navigates to OTP screen for verification
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+///   1. Patient enters phone number
+///   2. Phone is checked against Firestore (must be registered)
+///   3. OTP is sent to the phone number
+///   4. Navigates to OTP screen for verification
+class PatientLoginScreen extends StatefulWidget {
+  const PatientLoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<PatientLoginScreen> createState() => _PatientLoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _PatientLoginScreenState extends State<PatientLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _authService = AuthService();
@@ -39,35 +41,55 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final phone = _phoneController.text.trim();
+      final localNumber = _phoneController.text.trim().replaceAll(
+        RegExp(r'\s'),
+        '',
+      );
+      final phone = '+966$localNumber';
 
-      // Look up user's role from Firestore before sending OTP
-      String userRole = 'patient'; // default fallback
-      try {
-        final snapshot = await _authService.lookupUserRole(phone);
-        if (snapshot != null) {
-          userRole = snapshot;
-        }
-      } catch (e) {
-        debugPrint('Role lookup error: $e');
+      if (phone.isEmpty) {
+        setState(() {
+          _errorMessage = 'Please enter a valid phone number.';
+          _isLoading = false;
+        });
+        return;
       }
 
-      // Send OTP directly to the phone number
+      final userData = await _authService.findUserByPhone(phone: phone);
+
+      if (userData == null) {
+        setState(() {
+          _errorMessage = 'This phone number is not registered.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Check role - this is patient login
+      if (userData['role'] == 'doctor') {
+        setState(() {
+          _errorMessage = 'Please use the Doctor Portal to sign in.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (!mounted) return;
+
       await _authService.sendOTP(
         phoneNumber: phone,
         onCodeSent: (verificationId, resendToken) {
           if (!mounted) return;
           setState(() => _isLoading = false);
 
-          // Navigate to OTP screen
           Navigator.pushNamed(
             context,
-            '/otp',
+            '/patient/otp',
             arguments: {
               'verificationId': verificationId,
               'phoneNumber': phone,
               'isLogin': true,
-              'role': userRole,
+              'role': userData['role'],
             },
           );
         },
@@ -137,13 +159,41 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [SaudiPhoneFormatter()],
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _handleLogin(),
-                      decoration: const InputDecoration(
-                        hintText: '+966 5XX XXX XXXX',
-                        prefixIcon: Icon(
-                          Icons.phone_outlined,
-                          color: AppColors.primary,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '5X XXX XXXX',
+                        prefixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const SizedBox(width: 16),
+                            const Text(
+                              '\u{1F1F8}\u{1F1E6}',
+                              style: TextStyle(fontSize: 16, height: 1),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '+966 ',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                                color: AppColors.textPrimary,
+                                height: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 0,
+                          minHeight: 0,
                         ),
                       ),
                       validator: (value) {
@@ -154,15 +204,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           RegExp(r'\s'),
                           '',
                         );
-                        if (!RegExp(r'^\+[1-9]\d{6,14}$').hasMatch(cleaned)) {
-                          return 'Enter valid number with country code (e.g. +966...)';
+                        if (!RegExp(r'^5\d{8}$').hasMatch(cleaned)) {
+                          return 'Enter a valid Saudi number (e.g. 5XXXXXXXX)';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 28),
 
-                    // Send OTP button
+                    // Sign In button
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -196,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         GestureDetector(
                           onTap: () => Navigator.pushReplacementNamed(
                             context,
-                            '/register',
+                            '/patient/register',
                           ),
                           child: const Text(
                             'Sign Up',
@@ -208,6 +258,58 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Divider
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Divider(
+                            color: AppColors.divider,
+                            thickness: 1,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'OR',
+                            style: TextStyle(
+                              color: AppColors.textHint,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(
+                            color: AppColors.divider,
+                            thickness: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Doctor sign in
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            Navigator.pushNamed(context, '/doctor/login'),
+                        icon: const Icon(
+                          Icons.medical_services_outlined,
+                          size: 20,
+                        ),
+                        label: const Text('Sign in as Doctor'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -234,19 +336,16 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         child: SafeArea(
+          bottom: false,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 80,
-                height: 80,
-                child: const KhotaaLogo(size: 90, padding: 12),
-              ),
-              const SizedBox(height: 12),
+              const KhotaaLogo(size: 72, padding: 8),
+              const SizedBox(height: 8),
               const Text(
                 'KHOTAA',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                   letterSpacing: 6,

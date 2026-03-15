@@ -116,18 +116,26 @@ class _ConsultationSessionScreenState extends State<ConsultationSessionScreen> {
     final consultation = widget.consultation;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Consultation Session',
           style: TextStyle(
+            color: AppColors.primary,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            fontSize: 24,
           ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),

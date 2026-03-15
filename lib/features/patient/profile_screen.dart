@@ -8,6 +8,7 @@ import 'edit_profile_screen.dart';
 import 'favourite_doctors_screen.dart';
 import 'help_support_screen.dart';
 import 'medical_info_screen.dart';
+import 'patient_shell.dart';
 
 /// Patient profile screen
 class ProfileScreen extends StatefulWidget {
@@ -142,12 +143,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _profileTile(
               icon: Icons.calendar_today_outlined,
-              title: 'My Bookings',
-              onTap: () {
-                Navigator.push(
+              title: 'Appointments',
+              onTap: () async {
+                final result = await Navigator.push<String>(
                   context,
                   MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
                 );
+                if (result == 'findDoctor') {
+                  final shellState = context
+                      .findAncestorStateOfType<PatientShellState>();
+                  shellState?.switchToTab(3);
+                }
               },
             ),
             _profileTile(

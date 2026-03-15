@@ -16,6 +16,7 @@ import 'consultation_requests_screen.dart';
 import 'doctor_edit_profile_screen.dart';
 import 'doctor_help_support_screen.dart';
 import 'working_hours_screen.dart';
+import '../shared/consultation_session_screen.dart';
 
 class DHomeScreen extends StatefulWidget {
   const DHomeScreen({super.key});
@@ -29,9 +30,10 @@ class _DHomeScreenState extends State<DHomeScreen>
   int _currentIndex = 0;
   String _firstName = '';
   String _lastName = '';
-  int _selectedAppointmentTab = 0; // 0=Upcoming, 1=Completed, 2=Cancelled
+  int _selectedAppointmentTab = 0; // 0=Upcoming, 1=Follow-Up, 2=Completed
   late TabController _appointmentTabController;
   final DFURiskMonitorService _riskMonitor = DFURiskMonitorService();
+  final Set<String> _autoCompletedFollowUps = {};
 
   @override
   void initState() {
@@ -150,6 +152,7 @@ class _DHomeScreenState extends State<DHomeScreen>
   Widget build(BuildContext context) {
     return InAppNotificationListener(
       child: Scaffold(
+        backgroundColor: Colors.white,
         body: IndexedStack(
           index: _currentIndex,
           children: [
@@ -180,8 +183,8 @@ class _DHomeScreenState extends State<DHomeScreen>
                   _buildNavItem(1, Icons.people_outline, Icons.people),
                   _buildNavItem(
                     2,
-                    Icons.calendar_today_outlined,
-                    Icons.calendar_today,
+                    Icons.calendar_month_outlined,
+                    Icons.calendar_month,
                   ),
                   _buildNavItem(3, Icons.person_outline, Icons.person),
                 ],
@@ -196,98 +199,374 @@ class _DHomeScreenState extends State<DHomeScreen>
   // ─── TAB 1: DOCTOR HOME ─────────────────────────────────────────────
 
   Widget _buildHomeTab() {
-    final greeting = _firstName.isNotEmpty
-        ? 'Hello, Dr. $_firstName'
-        : 'Hello, Doctor';
-
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            _buildHeader(greeting),
-            const SizedBox(height: 24),
-            _buildStatsRow(),
-            const SizedBox(height: 24),
-            const Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              // ── Simple header matching patient style ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _quickAction(
-                    icon: Icons.dashboard_outlined,
-                    label: 'Patient\nDashboard',
-                    description: 'View patient details',
-                    color: const Color(0xFF6366F1),
-                    onTap: () => setState(() => _currentIndex = 1),
+                  Text(
+                    'Hi Dr. ${_firstName.isNotEmpty ? _firstName : 'Doctor'}!',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A2E),
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  _quickAction(
-                    icon: Icons.image_search_outlined,
-                    label: 'Image\nReview',
-                    description: 'Review foot images',
-                    color: const Color(0xFF22C55E),
-                    onTap: () => _navigateTo(const ImageReviewScreen()),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DoctorNotificationsScreen(),
+                        ),
+                      );
+                    },
+                    child: StreamBuilder<int>(
+                      stream: NotificationService().streamUnreadCount(
+                        FirebaseAuth.instance.currentUser?.uid ?? '',
+                      ),
+                      builder: (context, snapshot) {
+                        final unread = snapshot.data ?? 0;
+                        return Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFE5E7EB),
+                              width: 1,
+                            ),
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                unread > 0
+                                    ? Icons.notifications_active
+                                    : Icons.notifications_outlined,
+                                color: const Color(0xFF6B7280),
+                                size: 24,
+                              ),
+                              if (unread > 0)
+                                Positioned(
+                                  top: 6,
+                                  right: 6,
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE53935),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        unread > 9 ? '9+' : '$unread',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              const SizedBox(height: 20),
+              _buildStatsRow(),
+              const SizedBox(height: 24),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _quickAction(
+                      icon: Icons.dashboard_outlined,
+                      label: 'Patient\nDashboard',
+                      description: 'View patient details',
+                      color: const Color(0xFF6366F1),
+                      onTap: () => setState(() => _currentIndex = 1),
+                    ),
+                    const SizedBox(width: 12),
+                    _quickAction(
+                      icon: Icons.image_search_outlined,
+                      label: 'Image\nReview',
+                      description: 'Review foot images',
+                      color: const Color(0xFF22C55E),
+                      onTap: () => _navigateTo(const ImageReviewScreen()),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _quickAction(
+                      icon: Icons.medical_information_outlined,
+                      label: 'Treatment\nPlans',
+                      description: 'Manage treatment plans',
+                      color: const Color(0xFFEF4444),
+                      onTap: () => _navigateTo(const TreatmentPlanScreen()),
+                    ),
+                    const SizedBox(width: 12),
+                    _quickAction(
+                      icon: Icons.bookmark_outline,
+                      label: 'My\nRequests',
+                      description: 'View consultation requests',
+                      color: const Color(0xFFF97316),
+                      onTap: () =>
+                          _navigateTo(const ConsultationRequestsScreen()),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Active session banner
+              _buildDoctorActiveSessionBanner(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _quickAction(
-                    icon: Icons.medical_information_outlined,
-                    label: 'Treatment\nPlans',
-                    description: 'Manage treatment plans',
-                    color: const Color(0xFFEF4444),
-                    onTap: () => _navigateTo(const TreatmentPlanScreen()),
+                  const Text(
+                    "Upcoming Appointments",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  _quickAction(
-                    icon: Icons.bookmark_outline,
-                    label: 'My\nBookings',
-                    description: 'View booking requests',
-                    color: const Color(0xFFF97316),
-                    onTap: () =>
-                        _navigateTo(const ConsultationRequestsScreen()),
+                  TextButton(
+                    onPressed: () => setState(() => _currentIndex = 2),
+                    child: const Text('See All'),
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              _buildTodaysAppointmentsSection(),
+              const SizedBox(height: 28),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDoctorActiveSessionBanner() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    return StreamBuilder<List<Consultation>>(
+      stream: ConsultationService().streamDoctorConsultations(user.uid),
+      builder: (context, snapshot) {
+        final allSessions = snapshot.data ?? [];
+
+        // Auto-complete expired follow-up sessions
+        for (final session in allSessions) {
+          if (session.isFollowUpExpired &&
+              !_autoCompletedFollowUps.contains(session.consultationID)) {
+            _autoCompletedFollowUps.add(session.consultationID);
+            ConsultationService().completeConsultation(session.consultationID);
+            NotificationService().notifyFollowUpCompleted(
+              patientID: session.patientID,
+              doctorID: session.doctorID,
+              doctorName: session.doctorName ?? 'Doctor',
+              patientName: session.patientName ?? 'Patient',
+              consultationID: session.consultationID,
+            );
+          }
+        }
+
+        final active =
+            allSessions
+                .where(
+                  (c) =>
+                      (c.status == 'active' || c.status == 'followUp') &&
+                      !c.isFollowUpExpired,
+                )
+                .toList()
+              // Show active sessions first, then follow-ups
+              ..sort((a, b) {
+                if (a.status == 'active' && b.status != 'active') return -1;
+                if (a.status != 'active' && b.status == 'active') return 1;
+                return 0;
+              });
+
+        if (active.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          children: active.map((session) {
+            return _buildSessionBannerCard(
+              session: session,
+              isDoctor: true,
+              personName: session.patientName ?? 'Patient',
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildSessionBannerCard({
+    required Consultation session,
+    required bool isDoctor,
+    required String personName,
+  }) {
+    final isFollowUp = session.status == 'followUp';
+
+    // Calculate remaining days for follow-up
+    String? remainingText;
+    if (isFollowUp && session.followUpDueDate != null) {
+      final now = DateTime.now();
+      final due = session.followUpDueDate!;
+      final diff = due.difference(now).inDays;
+      if (diff > 1) {
+        remainingText = '$diff days remaining';
+      } else if (diff == 1) {
+        remainingText = '1 day remaining';
+      } else if (diff == 0) {
+        remainingText = 'Due today';
+      } else {
+        remainingText = 'Overdue';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ConsultationSessionScreen(
+                consultationId: session.consultationID,
+                isDoctor: isDoctor,
+              ),
             ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Today's Appointments",
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isFollowUp
+                  ? [const Color(0xFF64ADB3), const Color(0xFF4D9DA3)]
+                  : [const Color(0xFF22C55E), const Color(0xFF16A34A)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color:
+                    (isFollowUp
+                            ? const Color(0xFF64ADB3)
+                            : const Color(0xFF22C55E))
+                        .withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isFollowUp
+                      ? Icons.assignment_turned_in_outlined
+                      : Icons.video_call_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isFollowUp ? 'Follow-Up In Progress' : 'Active Session',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'With $personName',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                    if (isFollowUp && remainingText != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.timer_outlined,
+                            color: Colors.white.withOpacity(0.85),
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            remainingText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withOpacity(0.85),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isFollowUp ? 'View' : 'Join',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: isFollowUp
+                        ? const Color(0xFF4D9DA3)
+                        : const Color(0xFF22C55E),
                   ),
                 ),
-                TextButton(
-                  onPressed: () => setState(() => _currentIndex = 2),
-                  child: const Text('See All'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _buildTodaysAppointmentsSection(),
-            const SizedBox(height: 28),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -370,17 +649,30 @@ class _DHomeScreenState extends State<DHomeScreen>
           // Header row
           Row(
             children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person,
-                  color: AppColors.primary.withAlpha(120),
-                  size: 30,
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PatientDetailScreen(
+                        patientId: booking.patientID,
+                        patientName: booking.patientName ?? 'Patient',
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.person,
+                    color: AppColors.primary.withAlpha(120),
+                    size: 30,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -401,6 +693,32 @@ class _DHomeScreenState extends State<DHomeScreen>
                       style: TextStyle(color: AppColors.textHint, fontSize: 13),
                     ),
                   ],
+                ),
+              ),
+              // View patient profile button
+              IconButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PatientDetailScreen(
+                        patientId: booking.patientID,
+                        patientName: booking.patientName ?? 'Patient',
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.medical_information_outlined,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+                tooltip: 'View Medical History',
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.primary.withAlpha(25),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ],
@@ -431,10 +749,13 @@ class _DHomeScreenState extends State<DHomeScreen>
             child: ElevatedButton.icon(
               onPressed: _isChatCallAvailable(booking)
                   ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Consultation feature coming soon'),
-                          backgroundColor: AppColors.primary,
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ConsultationSessionScreen(
+                            consultationId: booking.consultationID,
+                            isDoctor: true,
+                          ),
                         ),
                       );
                     }
@@ -534,84 +855,106 @@ class _DHomeScreenState extends State<DHomeScreen>
     );
   }
 
+  String _formatDueDate(DateTime date) {
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[date.month]} ${date.day}, ${date.year}';
+  }
+
   Widget _buildStatsRow() {
     final user = FirebaseAuth.instance.currentUser;
 
-    Widget buildStatItem(
+    Widget buildStatCard(
       String value,
       String label,
       Color color,
       IconData icon,
     ) {
       return Expanded(
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: color,
-                height: 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
               ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: AppColors.textHint, size: 13),
-                const SizedBox(width: 3),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
-                  ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
-            ),
-          ],
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    Widget buildDivider() {
-      return Container(width: 1, height: 36, color: AppColors.divider);
-    }
-
     Widget buildContent(String patients, String today, String upcoming) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0F4F8),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            buildStatItem(
-              patients,
-              'Patients',
-              const Color(0xFF3B82F6),
-              Icons.people_outline,
-            ),
-            buildDivider(),
-            buildStatItem(
-              today,
-              'Today',
-              const Color(0xFF10B981),
-              Icons.calendar_today_outlined,
-            ),
-            buildDivider(),
-            buildStatItem(
-              upcoming,
-              'Upcoming',
-              const Color(0xFFF59E0B),
-              Icons.upcoming_outlined,
-            ),
-          ],
-        ),
+      return Row(
+        children: [
+          buildStatCard(
+            patients,
+            'Patients',
+            const Color(0xFF3B82F6),
+            Icons.people_outline,
+          ),
+          const SizedBox(width: 12),
+          buildStatCard(
+            today,
+            'Today',
+            const Color(0xFF10B981),
+            Icons.calendar_today_outlined,
+          ),
+          const SizedBox(width: 12),
+          buildStatCard(
+            upcoming,
+            'Upcoming',
+            const Color(0xFFF59E0B),
+            Icons.upcoming_outlined,
+          ),
+        ],
       );
     }
 
@@ -658,52 +1001,77 @@ class _DHomeScreenState extends State<DHomeScreen>
   // ─── TAB 2: PATIENTS LIST ───────────────────────────────────────────
 
   Widget _buildPatientsTab() {
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        title: const Text(
+          'My Patients',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primary,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Column(
         children: [
+          // Search bar
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: const Text(
-                    'My Patients',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search a Patient',
+                  hintStyle: TextStyle(color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.search, color: AppColors.textHint),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                const SizedBox(height: 16),
-              ],
+                onChanged: (value) {
+                  setState(() {});
+                },
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          // Patients list — query consultations with 'followUp' status for this doctor
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .where('role', isEqualTo: 'patient')
+                  .collection('consultations')
                   .where(
-                    'doctorId',
+                    'doctorID',
                     isEqualTo: FirebaseAuth.instance.currentUser?.uid,
                   )
+                  .where('status', isEqualTo: 'followUp')
                   .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+              builder: (context, consultSnap) {
+                if (consultSnap.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   );
                 }
 
-                final patients = snapshot.data?.docs ?? [];
+                final consultDocs = consultSnap.data?.docs ?? [];
 
-                if (patients.isEmpty) {
+                if (consultDocs.isEmpty) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -717,23 +1085,43 @@ class _DHomeScreenState extends State<DHomeScreen>
                   );
                 }
 
+                // Deduplicate by patientID, keep the most recent consultation
+                final Map<String, Map<String, dynamic>> patientMap = {};
+                for (final doc in consultDocs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final patientId = data['patientID'] as String? ?? '';
+                  if (patientId.isNotEmpty) {
+                    patientMap[patientId] = {
+                      'patientName': data['patientName'] ?? 'Unknown',
+                      'consultationId': doc.id,
+                      'followUpDueDate': data['followUpDueDate'],
+                    };
+                  }
+                }
+
+                final patientEntries = patientMap.entries.toList();
+
                 return Column(
                   children: [
                     Expanded(
                       child: ListView.separated(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: patients.length,
+                        itemCount: patientEntries.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
-                          final data =
-                              patients[index].data() as Map<String, dynamic>;
-                          final name =
-                              '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'
-                                  .trim();
+                          final entry = patientEntries[index];
+                          final name = entry.value['patientName'] as String;
+                          final dueDate = entry.value['followUpDueDate'];
+                          String? dueDateStr;
+                          if (dueDate != null && dueDate is Timestamp) {
+                            final d = dueDate.toDate();
+                            dueDateStr = '${d.day}/${d.month}/${d.year}';
+                          }
 
                           return _buildPatientCard(
-                            name: name.isNotEmpty ? name : 'Unknown',
-                            patientId: patients[index].id,
+                            name: name,
+                            patientId: entry.key,
+                            followUpDue: dueDateStr,
                           );
                         },
                       ),
@@ -789,7 +1177,11 @@ class _DHomeScreenState extends State<DHomeScreen>
     );
   }
 
-  Widget _buildPatientCard({required String name, required String patientId}) {
+  Widget _buildPatientCard({
+    required String name,
+    required String patientId,
+    String? followUpDue,
+  }) {
     return GestureDetector(
       onTap: () => _navigateTo(
         PatientDetailScreen(patientId: patientId, patientName: name),
@@ -824,13 +1216,29 @@ class _DHomeScreenState extends State<DHomeScreen>
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (followUpDue != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Follow-up due: $followUpDue',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             const Icon(
@@ -856,7 +1264,7 @@ class _DHomeScreenState extends State<DHomeScreen>
         title: const Text(
           'Appointments',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.primary,
             fontWeight: FontWeight.bold,
             fontSize: 22,
           ),
@@ -870,8 +1278,8 @@ class _DHomeScreenState extends State<DHomeScreen>
           indicatorWeight: 3,
           tabs: const [
             Tab(text: 'Upcoming'),
+            Tab(text: 'Follow-Up'),
             Tab(text: 'Completed'),
-            Tab(text: 'Cancelled'),
           ],
         ),
       ),
@@ -894,7 +1302,15 @@ class _DHomeScreenState extends State<DHomeScreen>
           String emptySubtitle;
 
           switch (_selectedAppointmentTab) {
-            case 1: // Completed
+            case 1: // Follow-Up
+              filtered = allBookings
+                  .where((b) => b.status == 'followUp')
+                  .toList();
+              emptyTitle = 'No follow-up appointments';
+              emptySubtitle =
+                  'Patients with active follow-up plans will appear here';
+              break;
+            case 2: // Completed
               filtered = allBookings
                   .where((b) => b.status == 'completed')
                   .toList();
@@ -902,16 +1318,7 @@ class _DHomeScreenState extends State<DHomeScreen>
               emptySubtitle =
                   'Appointments you mark as completed will appear here';
               break;
-            case 2: // Cancelled
-              filtered = allBookings
-                  .where(
-                    (b) => b.status == 'rejected' || b.status == 'cancelled',
-                  )
-                  .toList();
-              emptyTitle = 'No cancelled appointments';
-              emptySubtitle = 'Cancelled appointments will appear here';
-              break;
-            default: // Upcoming (pending + accepted, today or future only)
+            default: // Upcoming (pending + accepted + active, today or future only)
               final todayStart = DateTime.now();
               final startOfToday = DateTime(
                 todayStart.year,
@@ -921,7 +1328,9 @@ class _DHomeScreenState extends State<DHomeScreen>
               filtered = allBookings
                   .where(
                     (b) =>
-                        (b.status == 'pending' || b.status == 'accepted') &&
+                        (b.status == 'pending' ||
+                            b.status == 'accepted' ||
+                            b.status == 'active') &&
                         b.consultationDate != null &&
                         !b.consultationDate!.isBefore(startOfToday),
                   )
@@ -986,6 +1395,16 @@ class _DHomeScreenState extends State<DHomeScreen>
         statusColor = AppColors.primary;
         statusIcon = Icons.check_circle_outline;
         break;
+      case 'active':
+        statusColor = const Color(0xFF3B82F6);
+        statusIcon = Icons.play_circle_outline;
+        statusText = 'In Session';
+        break;
+      case 'followUp':
+        statusColor = Colors.orange;
+        statusIcon = Icons.access_time;
+        statusText = 'Follow-up';
+        break;
       case 'completed':
         statusColor = const Color(0xFF22C55E);
         statusIcon = Icons.check_circle;
@@ -999,156 +1418,230 @@ class _DHomeScreenState extends State<DHomeScreen>
         statusIcon = Icons.pending_actions;
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.inputBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(5),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConsultationSessionScreen(
+              consultationId: booking.consultationID,
+              isDoctor: true,
+            ),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person,
-                  color: AppColors.primary.withAlpha(120),
-                  size: 30,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      booking.patientName ?? 'Unknown Patient',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.inputBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(5),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PatientDetailScreen(
+                          patientId: booking.patientID,
+                          patientName: booking.patientName ?? 'Patient',
+                        ),
                       ),
+                    );
+                  },
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'General Consultation',
-                      style: TextStyle(color: AppColors.textHint, fontSize: 13),
+                    child: Icon(
+                      Icons.person,
+                      color: AppColors.primary.withAlpha(120),
+                      size: 30,
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              if (booking.status != 'accepted' && booking.status != 'rejected')
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withAlpha(25),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 4),
                       Text(
-                        statusText.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 11,
+                        booking.patientName ?? 'Unknown Patient',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: statusColor,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'General Consultation',
+                        style: TextStyle(
+                          color: AppColors.textHint,
+                          fontSize: 13,
                         ),
                       ),
                     ],
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1),
-          const SizedBox(height: 16),
-
-          // Date and time row
-          Row(
-            children: [
-              _buildInfoChip(
-                Icons.calendar_today_outlined,
-                booking.consultationDate != null
-                    ? booking.formattedDate
-                    : 'No date',
-              ),
-              const SizedBox(width: 16),
-              if (booking.timeSlot != null)
-                _buildInfoChip(Icons.access_time, booking.timeSlot!),
-            ],
-          ),
-
-          // Start Consultation button (only for accepted, disabled until 30 min before)
-          if (booking.status == 'accepted') ...[
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isChatCallAvailable(booking)
-                    ? () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Consultation feature coming soon'),
-                            backgroundColor: AppColors.primary,
-                          ),
-                        );
-                      }
-                    : null,
-                icon: Icon(
-                  Icons.video_call_outlined,
-                  size: 20,
-                  color: _isChatCallAvailable(booking)
-                      ? Colors.white
-                      : AppColors.textHint,
+                // View patient profile button
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PatientDetailScreen(
+                          patientId: booking.patientID,
+                          patientName: booking.patientName ?? 'Patient',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.medical_information_outlined,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
+                  tooltip: 'View Medical History',
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary.withAlpha(25),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                 ),
-                label: Text(
-                  _isChatCallAvailable(booking)
-                      ? 'Start Consultation'
-                      : 'Available 30 min before appointment',
-                  style: TextStyle(
+                const SizedBox(width: 4),
+                if (booking.status != 'accepted' &&
+                    booking.status != 'rejected')
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withAlpha(25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusIcon, size: 14, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          statusText.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+
+            // Date and time row
+            Row(
+              children: [
+                _buildInfoChip(
+                  Icons.calendar_today_outlined,
+                  booking.consultationDate != null
+                      ? booking.formattedDate
+                      : 'No date',
+                ),
+                const SizedBox(width: 16),
+                if (booking.timeSlot != null)
+                  _buildInfoChip(Icons.access_time, booking.timeSlot!),
+              ],
+            ),
+
+            // Due date for follow-up
+            if (booking.status == 'followUp' &&
+                booking.followUpDueDate != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildInfoChip(
+                    Icons.event,
+                    'Due: ${_formatDueDate(booking.followUpDueDate!)}',
+                  ),
+                ],
+              ),
+            ],
+
+            // Start Consultation button (only for accepted, disabled until 30 min before)
+            if (booking.status == 'accepted') ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isChatCallAvailable(booking)
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ConsultationSessionScreen(
+                                consultationId: booking.consultationID,
+                                isDoctor: true,
+                              ),
+                            ),
+                          );
+                        }
+                      : null,
+                  icon: Icon(
+                    Icons.video_call_outlined,
+                    size: 20,
                     color: _isChatCallAvailable(booking)
                         ? Colors.white
                         : AppColors.textHint,
-                    fontWeight: FontWeight.w600,
-                    fontSize: _isChatCallAvailable(booking) ? 14 : 12,
                   ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isChatCallAvailable(booking)
-                      ? AppColors.primary
-                      : Colors.grey.shade200,
-                  disabledBackgroundColor: Colors.grey.shade200,
-                  elevation: _isChatCallAvailable(booking) ? 2 : 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  label: Text(
+                    _isChatCallAvailable(booking)
+                        ? 'Start Consultation'
+                        : 'Available 30 min before appointment',
+                    style: TextStyle(
+                      color: _isChatCallAvailable(booking)
+                          ? Colors.white
+                          : AppColors.textHint,
+                      fontWeight: FontWeight.w600,
+                      fontSize: _isChatCallAvailable(booking) ? 14 : 12,
+                    ),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isChatCallAvailable(booking)
+                        ? AppColors.primary
+                        : Colors.grey.shade200,
+                    disabledBackgroundColor: Colors.grey.shade200,
+                    elevation: _isChatCallAvailable(booking) ? 2 : 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1271,7 +1764,7 @@ class _DHomeScreenState extends State<DHomeScreen>
         child: Icon(
           isSelected ? activeIcon : icon,
           color: isSelected ? AppColors.primary : AppColors.textHint,
-          size: 24,
+          size: 26,
         ),
       ),
     );
@@ -1292,6 +1785,7 @@ class _DHomeScreenState extends State<DHomeScreen>
       child: GestureDetector(
         onTap: onTap,
         child: Container(
+          height: 170,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: color.withAlpha(25),
@@ -1319,9 +1813,11 @@ class _DHomeScreenState extends State<DHomeScreen>
                   height: 1.3,
                 ),
               ),
-              const SizedBox(height: 4),
+              const Spacer(),
               Text(
                 description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -1361,14 +1857,11 @@ class _DHomeScreenState extends State<DHomeScreen>
               color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 8),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color.fromARGB(160, 156, 163, 175),
-            ),
+            style: const TextStyle(fontSize: 13, color: AppColors.textHint),
           ),
         ],
       ),
@@ -1399,97 +1892,6 @@ class _DHomeScreenState extends State<DHomeScreen>
         size: 20,
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-    );
-  }
-
-  Widget _buildHeader(String greeting) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Text(
-                greeting,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                  height: 1.0,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DoctorNotificationsScreen(),
-                  ),
-                );
-              },
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withAlpha(20),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: StreamBuilder<int>(
-                  stream: NotificationService().streamUnreadCount(
-                    FirebaseAuth.instance.currentUser?.uid ?? '',
-                  ),
-                  builder: (context, snapshot) {
-                    final unread = snapshot.data ?? 0;
-                    return Stack(
-                      children: [
-                        const Center(
-                          child: Icon(
-                            Icons.notifications_outlined,
-                            color: AppColors.primary,
-                            size: 26,
-                          ),
-                        ),
-                        if (unread > 0)
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 18,
-                                minHeight: 18,
-                              ),
-                              child: Text(
-                                unread > 9 ? '9+' : '$unread',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 0),
-        const Text(
-          'Welcome back! Good to see you.',
-          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-        ),
-      ],
     );
   }
 }

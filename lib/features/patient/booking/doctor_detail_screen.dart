@@ -128,57 +128,154 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Doctor Details',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            onPressed: _toggleFavourite,
-            icon: Icon(
-              _isFavourite ? Icons.favorite : Icons.favorite_border,
-              color: _isFavourite ? AppColors.primary : AppColors.textHint,
-              size: 26,
+      body: Column(
+        children: [
+          // ── Teal header with doctor avatar ──
+          _buildProfileHeader(context),
+
+          // ── Scrollable content ──
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Column(
+                children: [
+                  // Stats row
+                  _buildStatsRow(),
+                  const SizedBox(height: 20),
+
+                  // Working hours
+                  _buildWorkingHours(),
+                  const SizedBox(height: 28),
+
+                  // Book appointment button
+                  _buildBookButton(context),
+                  const SizedBox(height: 28),
+                ],
+              ),
             ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
+    );
+  }
+
+  // ───────────────────────────── HEADER ─────────────────────────────
+
+  Widget _buildProfileHeader(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF64ADB3), Color(0xFF4D9DA3)],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
           child: Column(
             children: [
-              // Doctor image and basic info
-              _buildDoctorHeader(),
-              const SizedBox(height: 24),
+              // ── Top bar: back, title, favourite ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const Text(
+                    'Doctor Details',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _toggleFavourite,
+                    icon: Icon(
+                      _isFavourite ? Icons.favorite : Icons.favorite_border,
+                      color: _isFavourite
+                          ? const Color(0xFFFF6B6B)
+                          : Colors.white70,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
 
-              // Stats row
-              _buildStatsRow(),
-              const SizedBox(height: 24),
+              // ── Avatar ──
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.2),
+                  border: Border.all(color: Colors.white, width: 2.5),
+                ),
+                child: Icon(
+                  Icons.person,
+                  size: 38,
+                  color: Colors.white.withOpacity(0.85),
+                ),
+              ),
+              const SizedBox(height: 10),
 
-              // About section
-              _buildAboutSection(),
-              const SizedBox(height: 24),
+              // ── Name ──
+              Text(
+                'Dr. ${doctor.firstName} ${doctor.lastName}',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
 
-              // Working hours
-              _buildWorkingHours(),
-              const SizedBox(height: 32),
-
-              // Book appointment button
-              _buildBookButton(context),
-              const SizedBox(height: 20),
+              // ── Hospital pill ──
+              if (doctor.hospitalName != null &&
+                  doctor.hospitalName!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.local_hospital_outlined,
+                        size: 13,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        doctor.hospitalName!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -186,100 +283,81 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     );
   }
 
-  Widget _buildDoctorHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Doctor image
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primary, width: 3),
-            ),
-            child: Icon(
-              Icons.person,
-              size: 60,
-              color: AppColors.primary.withOpacity(0.5),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Doctor name
-          Text(
-            'Dr. ${doctor.firstName} ${doctor.lastName}',
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          // Specialty
-          Text(
-            doctor.specialtyLevel ?? 'General Physician',
-            style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [SizedBox(width: 4)],
-          ),
-        ],
-      ),
-    );
-  }
+  // ───────────────────────────── STATS ──────────────────────────────
 
   Widget _buildStatsRow() {
+    final hasRating = doctor.ratingCount > 0;
     return Row(
       children: [
+        _buildStatCard('Degree', doctor.degree ?? 'N/A', Icons.school_outlined),
+        const SizedBox(width: 10),
         _buildStatCard(
-          'Experience',
-          '10+ yrs',
-          Icons.workspace_premium_outlined,
+          'Specialty',
+          doctor.specialtyLevel ?? 'General',
+          Icons.medical_services_outlined,
         ),
-        const SizedBox(width: 16),
-        _buildStatCard('Rating', '5.0', Icons.star_outline),
+        if (hasRating) ...[
+          const SizedBox(width: 10),
+          _buildStatCard(
+            'Rating',
+            doctor.rating.toStringAsFixed(1),
+            Icons.star_rounded,
+            iconColor: Colors.amber,
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon, {
+    Color? iconColor,
+  }) {
+    final color = iconColor ?? AppColors.primary;
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.primary.withOpacity(0.12)),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10),
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.primary, size: 24),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
             const SizedBox(height: 8),
             Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(color: AppColors.textHint, fontSize: 12),
+              style: TextStyle(color: AppColors.textHint, fontSize: 11),
             ),
           ],
         ),
@@ -287,51 +365,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     );
   }
 
-  Widget _buildAboutSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'About',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Dr. ${doctor.firstName} ${doctor.lastName} is a highly qualified medical professional with extensive experience in patient care. '
-            'Specializing in ${doctor.specialtyLevel ?? "general medicine"}, they are committed to providing comprehensive and compassionate healthcare.',
-            style: TextStyle(color: AppColors.textSecondary, height: 1.5),
-          ),
-          if (doctor.degree != null) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.school_outlined, color: AppColors.primary, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  doctor.degree!,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  // ────────────────────────── WORKING HOURS ─────────────────────────
 
   Widget _buildWorkingHours() {
     return Container(
@@ -340,22 +374,45 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.12)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10),
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Working Hours',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.schedule,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Working Hours',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (_loadingHours)
             const Center(
               child: Padding(
@@ -370,11 +427,19 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
           else if (_workingHours != null)
             ..._buildDynamicHours()
           else ...[
-            _buildHoursRow('Monday - Friday', '09:00 AM - 05:00 PM'),
+            _buildHoursRow('Sunday', '24 Hours'),
             const SizedBox(height: 8),
-            _buildHoursRow('Saturday', '09:00 AM - 01:00 PM'),
+            _buildHoursRow('Monday', '24 Hours'),
             const SizedBox(height: 8),
-            _buildHoursRow('Sunday', 'Closed', isClosed: true),
+            _buildHoursRow('Tuesday', '24 Hours'),
+            const SizedBox(height: 8),
+            _buildHoursRow('Wednesday', '24 Hours'),
+            const SizedBox(height: 8),
+            _buildHoursRow('Thursday', '24 Hours'),
+            const SizedBox(height: 8),
+            _buildHoursRow('Friday', 'Closed', isClosed: true),
+            const SizedBox(height: 8),
+            _buildHoursRow('Saturday', 'Closed', isClosed: true),
           ],
         ],
       ),
@@ -395,7 +460,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     for (int i = 0; i < dayOrder.length; i++) {
       final day = dayOrder[i];
       final dayData = _workingHours![day] as Map<String, dynamic>?;
-      if (i > 0) widgets.add(const SizedBox(height: 8));
+      if (i > 0) widgets.add(const SizedBox(height: 10));
       if (dayData != null && dayData['enabled'] == true) {
         widgets.add(
           _buildHoursRow(day, '${dayData['start']} - ${dayData['end']}'),
@@ -408,20 +473,42 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   }
 
   Widget _buildHoursRow(String day, String hours, {bool isClosed = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(day, style: TextStyle(color: AppColors.textSecondary)),
-        Text(
-          hours,
-          style: TextStyle(
-            color: isClosed ? AppColors.error : AppColors.textPrimary,
-            fontWeight: FontWeight.w500,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            day,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-      ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: isClosed
+                  ? AppColors.error.withOpacity(0.08)
+                  : AppColors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              hours,
+              style: TextStyle(
+                color: isClosed ? AppColors.error : AppColors.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
+
+  // ───────────────────────── BOOK BUTTON ────────────────────────────
 
   Widget _buildBookButton(BuildContext context) {
     return SizedBox(
@@ -444,9 +531,16 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
           ),
           elevation: 0,
         ),
-        child: const Text(
-          'Book Appointment',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.calendar_month_outlined, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Book Appointment',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
       ),
     );

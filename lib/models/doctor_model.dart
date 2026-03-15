@@ -13,6 +13,8 @@ class DoctorModel extends UserModel {
   final String? degree;
   final String? hospitalName;
   final List<String> patientIds; // References to Patient documents
+  final double rating; // Average rating (0-5)
+  final int ratingCount; // Number of ratings received
 
   DoctorModel({
     required super.id,
@@ -29,6 +31,8 @@ class DoctorModel extends UserModel {
     this.degree,
     this.hospitalName,
     this.patientIds = const [],
+    this.rating = 0.0,
+    this.ratingCount = 0,
   }) : super(role: 'doctor');
 
   /// Create a DoctorModel from Firestore document snapshot
@@ -41,7 +45,7 @@ class DoctorModel extends UserModel {
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
-      age: data['age'],
+      age: (data['age'] as num?)?.toInt(),
       gender: data['gender'],
       phone: data['phone'] ?? '',
       password: data['password'],
@@ -55,6 +59,8 @@ class DoctorModel extends UserModel {
       degree: data['degree'],
       hospitalName: data['hospitalName'],
       patientIds: List<String>.from(data['patientIds'] ?? []),
+      rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
+      ratingCount: (data['ratingCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -67,7 +73,7 @@ class DoctorModel extends UserModel {
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
-      age: data['age'],
+      age: (data['age'] as num?)?.toInt(),
       gender: data['gender'],
       phone: data['phone'] ?? '',
       password: data['password'],
@@ -81,6 +87,8 @@ class DoctorModel extends UserModel {
       degree: data['degree'],
       hospitalName: data['hospitalName'],
       patientIds: List<String>.from(data['patientIds'] ?? []),
+      rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
+      ratingCount: (data['ratingCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -93,6 +101,8 @@ class DoctorModel extends UserModel {
       'degree': degree,
       'hospitalName': hospitalName,
       'patientIds': patientIds,
+      'rating': rating,
+      'ratingCount': ratingCount,
     });
     return map;
   }
@@ -113,6 +123,8 @@ class DoctorModel extends UserModel {
     String? degree,
     String? hospitalName,
     List<String>? patientIds,
+    double? rating,
+    int? ratingCount,
   }) {
     return DoctorModel(
       id: id ?? this.id,
@@ -129,6 +141,8 @@ class DoctorModel extends UserModel {
       degree: degree ?? this.degree,
       hospitalName: hospitalName ?? this.hospitalName,
       patientIds: patientIds ?? this.patientIds,
+      rating: rating ?? this.rating,
+      ratingCount: ratingCount ?? this.ratingCount,
     );
   }
 

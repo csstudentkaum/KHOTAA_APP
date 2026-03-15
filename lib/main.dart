@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'app/app_theme.dart';
 import 'app/routes.dart';
 import 'services/notification_service.dart';
 import 'services/local_notification_service.dart';
+import 'services/bluetooth_service.dart';
 
 /// Handle background messages
 @pragma('vm:entry-point')
@@ -97,12 +99,15 @@ class KhotaaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'KHOTAA',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      initialRoute: AppRoutes.splash,
-      routes: AppRoutes.routes,
+    return ChangeNotifierProvider<BluetoothService>(
+      create: (_) => BluetoothService(),
+      child: MaterialApp(
+        title: 'KHOTAA',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        initialRoute: AppRoutes.splash,
+        routes: AppRoutes.routes,
+      ),
     );
   }
 }

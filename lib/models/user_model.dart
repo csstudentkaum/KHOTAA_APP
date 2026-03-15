@@ -11,7 +11,8 @@ class UserModel {
   final int? age;
   final String? gender;
   final String phone;
-  final String? password; // Note: password is managed by Firebase Auth, stored here only if needed
+  final String?
+  password; // Note: password is managed by Firebase Auth, stored here only if needed
   final String role; // 'doctor' or 'patient'
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -40,7 +41,7 @@ class UserModel {
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
-      age: data['age'],
+      age: (data['age'] as num?)?.toInt(),
       gender: data['gender'],
       phone: data['phone'] ?? '',
       password: data['password'],
@@ -63,7 +64,7 @@ class UserModel {
       dateOfBirth: data['dateOfBirth'] != null
           ? (data['dateOfBirth'] as Timestamp).toDate()
           : null,
-      age: data['age'],
+      age: (data['age'] as num?)?.toInt(),
       gender: data['gender'],
       phone: data['phone'] ?? '',
       password: data['password'],
@@ -82,14 +83,16 @@ class UserModel {
     return {
       'firstName': firstName,
       'lastName': lastName,
-      'dateOfBirth':
-          dateOfBirth != null ? Timestamp.fromDate(dateOfBirth!) : null,
+      'dateOfBirth': dateOfBirth != null
+          ? Timestamp.fromDate(dateOfBirth!)
+          : null,
       'age': age,
       'gender': gender,
       'phone': phone,
       'role': role,
-      'createdAt':
-          createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'createdAt': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }

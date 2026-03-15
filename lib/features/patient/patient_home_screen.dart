@@ -6,6 +6,8 @@ import '../../app/app_theme.dart';
 import '../../models/consultation.dart';
 import '../../services/consultation_service.dart';
 import 'booking/my_bookings_screen.dart';
+import '../shared/consultation_session_screen.dart';
+import 'patient_shell.dart';
 
 /// Patient Home Screen - Dashboard for patients
 class PatientHomeScreen extends StatefulWidget {
@@ -124,11 +126,16 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               ),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final result = await Navigator.push<String>(
                   context,
                   MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
                 );
+                if (result == 'findDoctor') {
+                  final shellState = context
+                      .findAncestorStateOfType<PatientShellState>();
+                  shellState?.switchToTab(3);
+                }
               },
               child: const Text('See All'),
             ),
@@ -315,10 +322,13 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
             child: ElevatedButton.icon(
               onPressed: _isChatCallAvailable(c)
                   ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Consultation feature coming soon'),
-                          backgroundColor: AppColors.primary,
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ConsultationSessionScreen(
+                            consultationId: c.consultationID,
+                            isDoctor: false,
+                          ),
                         ),
                       );
                     }

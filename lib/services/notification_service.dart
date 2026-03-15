@@ -218,6 +218,66 @@ class NotificationService {
     await batch.commit();
   }
 
+  /// Notify patient that their booking has been confirmed
+  Future<void> notifyPatientBookingConfirmed({
+    required String patientID,
+    required String doctorName,
+    required String date,
+    required String timeSlot,
+    required String consultationID,
+  }) async {
+    await createNotification(
+      recipientID: patientID,
+      title: 'Booking Confirmed',
+      body:
+          'Your appointment with $doctorName on $date at $timeSlot has been confirmed.',
+      type: 'booking_confirmed',
+      data: {'consultationID': consultationID},
+    );
+  }
+
+  /// Notify patient when a follow-up is assigned by the doctor
+  Future<void> notifyPatientFollowUpStarted({
+    required String patientID,
+    required String doctorName,
+    required int followUpDays,
+    required String consultationID,
+  }) async {
+    await createNotification(
+      recipientID: patientID,
+      title: 'Follow-Up Assigned',
+      body:
+          '$doctorName has assigned a $followUpDays-day follow-up plan for you.',
+      type: 'follow_up_started',
+      data: {'consultationID': consultationID},
+    );
+  }
+
+  /// Notify patient and doctor when follow-up auto-completes
+  Future<void> notifyFollowUpCompleted({
+    required String patientID,
+    required String doctorID,
+    required String doctorName,
+    required String patientName,
+    required String consultationID,
+  }) async {
+    await createNotification(
+      recipientID: patientID,
+      title: 'Follow-Up Completed',
+      body:
+          'Your follow-up with $doctorName has ended. You can now book a new session.',
+      type: 'follow_up_completed',
+      data: {'consultationID': consultationID},
+    );
+    await createNotification(
+      recipientID: doctorID,
+      title: 'Follow-Up Completed',
+      body: 'The follow-up with $patientName has ended.',
+      type: 'follow_up_completed',
+      data: {'consultationID': consultationID},
+    );
+  }
+
   // ── DFU Risk Alert Helpers ──
 
   /// Notify doctor about high pressure reading for a patient

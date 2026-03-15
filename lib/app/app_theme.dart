@@ -5,12 +5,12 @@ class AppColors {
   AppColors._();
 
   // Primary teal palette
-  static const Color primary = Color(0xFF2A9D8F);
-  static const Color primaryDark = Color(0xFF1F7A6E);
-  static const Color primaryLight = Color(0xFF5CC5B8);
+  static const Color primary = Color(0xFF64ADB3);
+  static const Color primaryDark = Color(0xFF4D9DA3);
+  static const Color primaryLight = Color(0xFF8DC5CA);
 
   // Backgrounds
-  static const Color background = Color(0xFFF5F9F8);
+  static const Color background = Colors.white;
   static const Color surface = Colors.white;
   static const Color cardBg = Colors.white;
 
@@ -24,6 +24,7 @@ class AppColors {
   static const Color error = Color(0xFFE74C3C);
   static const Color success = Color(0xFF27AE60);
   static const Color warning = Color(0xFFF39C12);
+  static const Color info = Color(0xFF3498DB);
 
   // Misc
   static const Color divider = Color(0xFFE5E7EB);
@@ -63,10 +64,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -77,17 +75,16 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.inputFill,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.inputBorder),
@@ -104,17 +101,12 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        hintStyle: const TextStyle(
-          color: AppColors.textHint,
-          fontSize: 14,
-        ),
+        hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
       ),
       cardTheme: CardThemeData(
         color: AppColors.cardBg,
         elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       textTheme: const TextTheme(
         headlineLarge: TextStyle(
@@ -137,14 +129,8 @@ class AppTheme {
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        bodyLarge: TextStyle(
-          fontSize: 16,
-          color: AppColors.textPrimary,
-        ),
-        bodyMedium: TextStyle(
-          fontSize: 14,
-          color: AppColors.textSecondary,
-        ),
+        bodyLarge: TextStyle(fontSize: 16, color: AppColors.textPrimary),
+        bodyMedium: TextStyle(fontSize: 14, color: AppColors.textSecondary),
         labelLarge: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,

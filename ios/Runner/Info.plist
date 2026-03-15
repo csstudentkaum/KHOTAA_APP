@@ -65,5 +65,15 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSCameraUsageDescription</key>
+		<string>Khotaa needs access to your camera to take photos of your foot for AI analysis.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Khotaa needs access to your photo library to select foot images for AI analysis.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>Khotaa needs access to your microphone for video consultations with doctors.</string>
+		<key>NSBluetoothAlwaysUsageDescription</key>
+		<string>Khotaa needs Bluetooth to connect to your smart insole device.</string>
+		<key>NSBluetoothPeripheralUsageDescription</key>
+		<string>Khotaa needs Bluetooth to connect to your smart insole device.</string>
 	</dict>
 </plist>

@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import '../models/consultation.dart';
 import '../models/doctor_model.dart';
+import 'local_notification_service.dart';
 import 'notification_service.dart';
 
 /// Service class for consultation operations
@@ -107,6 +110,26 @@ class ConsultationService {
       consultationID: docRef.id,
     );
 
+    // Notify the patient that booking is confirmed
+    await NotificationService().notifyPatientBookingConfirmed(
+      patientID: patientID,
+      doctorName: doctorName,
+      date: dateStr,
+      timeSlot: timeSlot,
+      consultationID: docRef.id,
+    );
+
+    // Schedule native reminder 30 minutes before the session
+    _scheduleBookingReminder(
+      consultationID: docRef.id,
+      patientID: patientID,
+      doctorID: doctorID,
+      patientName: patientName,
+      doctorName: doctorName,
+      consultationDate: consultationDate,
+      timeSlot: timeSlot,
+    );
+
     return consultation;
   }
 
@@ -138,6 +161,8 @@ class ConsultationService {
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
+    // Query without status filter to avoid complex compound index issues,
+    // then filter in memory.
     final snapshot = await _consultationsRef
         .where('doctorID', isEqualTo: doctorID)
         .where(
@@ -145,10 +170,14 @@ class ConsultationService {
           isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
         )
         .where('consultationDate', isLessThan: Timestamp.fromDate(endOfDay))
-        .where('status', whereIn: ['pending', 'accepted'])
         .get();
 
     return snapshot.docs
+        .where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final status = data['status'] as String? ?? '';
+          return status == 'pending' || status == 'accepted';
+        })
         .map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           return data['timeSlot'] as String? ?? '';
@@ -177,6 +206,8 @@ class ConsultationService {
 
   /// Delete a consultation entirely from Firestore
   Future<void> deleteConsultation(String consultationID) async {
+    // Cancel any scheduled reminder notifications
+    cancelBookingReminder(consultationID);
     await _consultationsRef.doc(consultationID).delete();
   }
 
@@ -227,39 +258,19 @@ class ConsultationService {
 
         allSlots = _generateSlots(startStr, endStr);
       } else {
-        // Fallback: default slots
-        allSlots = [
-          '09:00 AM',
-          '09:30 AM',
-          '10:00 AM',
-          '10:30 AM',
-          '11:00 AM',
-          '11:30 AM',
-          '12:00 PM',
-          '02:00 PM',
-          '02:30 PM',
-          '03:00 PM',
-          '03:30 PM',
-          '04:00 PM',
-          '04:30 PM',
-        ];
+        // Fallback: default 24-hour slots (Sunday–Thursday)
+        // Friday & Saturday closed
+        if (dayName == 'Friday' || dayName == 'Saturday') {
+          return [];
+        }
+        allSlots = _generateSlots('12:00 AM', '11:59 PM');
       }
-    } catch (_) {
-      allSlots = [
-        '09:00 AM',
-        '09:30 AM',
-        '10:00 AM',
-        '10:30 AM',
-        '11:00 AM',
-        '11:30 AM',
-        '12:00 PM',
-        '02:00 PM',
-        '02:30 PM',
-        '03:00 PM',
-        '03:30 PM',
-        '04:00 PM',
-        '04:30 PM',
-      ];
+    } catch (e) {
+      debugPrint('Error loading doctor working hours: $e');
+      if (dayName == 'Friday' || dayName == 'Saturday') {
+        return [];
+      }
+      allSlots = _generateSlots('12:00 AM', '11:59 PM');
     }
 
     final bookedSlots = await getBookedTimeSlots(doctorID, date);
@@ -361,5 +372,73 @@ class ConsultationService {
               .map((doc) => Consultation.fromDocument(doc))
               .toList(),
         );
+  }
+
+  // ── Booking Reminder Scheduling ──
+
+  /// Parse a timeSlot string like "10:00 AM" into hour and minute.
+  DateTime? _parseSessionDateTime(DateTime date, String timeSlot) {
+    try {
+      // Parse "h:mm a" or "hh:mm a" format
+      final format = DateFormat('h:mm a');
+      final parsed = format.parse(timeSlot);
+      return DateTime(
+        date.year,
+        date.month,
+        date.day,
+        parsed.hour,
+        parsed.minute,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Could not parse timeSlot "$timeSlot": $e');
+      return null;
+    }
+  }
+
+  /// Schedule a native reminder 30 minutes before the session for both
+  /// the patient and the doctor.
+  void _scheduleBookingReminder({
+    required String consultationID,
+    required String patientID,
+    required String doctorID,
+    required String patientName,
+    required String doctorName,
+    required DateTime consultationDate,
+    required String timeSlot,
+  }) {
+    final sessionTime = _parseSessionDateTime(consultationDate, timeSlot);
+    if (sessionTime == null) return;
+
+    final reminderTime = sessionTime.subtract(const Duration(minutes: 30));
+
+    // Use hashCode to generate unique notification IDs
+    final patientNotifId = '${consultationID}_patient'.hashCode;
+    final doctorNotifId = '${consultationID}_doctor'.hashCode;
+
+    // Schedule for the patient
+    LocalNotificationService().scheduleReminder(
+      id: patientNotifId,
+      title: 'Upcoming Session',
+      body:
+          'Your session with Dr. $doctorName starts in 30 minutes ($timeSlot)',
+      scheduledTime: reminderTime,
+    );
+
+    // Schedule for the doctor
+    LocalNotificationService().scheduleReminder(
+      id: doctorNotifId,
+      title: 'Upcoming Session',
+      body: 'Your session with $patientName starts in 30 minutes ($timeSlot)',
+      scheduledTime: reminderTime,
+    );
+  }
+
+  /// Cancel scheduled reminders when a booking is cancelled.
+  void cancelBookingReminder(String consultationID) {
+    final patientNotifId = '${consultationID}_patient'.hashCode;
+    final doctorNotifId = '${consultationID}_doctor'.hashCode;
+
+    LocalNotificationService().cancelReminder(patientNotifId);
+    LocalNotificationService().cancelReminder(doctorNotifId);
   }
 }

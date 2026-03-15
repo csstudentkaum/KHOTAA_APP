@@ -174,6 +174,14 @@ class _NotificationPopupState extends State<_NotificationPopup>
         return Icons.cancel_outlined;
       case 'booking_completed':
         return Icons.task_alt;
+      case 'booking_confirmed':
+        return Icons.check_circle_outline;
+      case 'booking_cancelled':
+        return Icons.event_busy_outlined;
+      case 'follow_up_started':
+        return Icons.assignment_turned_in_outlined;
+      case 'follow_up_completed':
+        return Icons.verified_outlined;
       case 'high_pressure':
         return Icons.warning_amber_rounded;
       case 'elevated_pressure':
@@ -196,6 +204,14 @@ class _NotificationPopupState extends State<_NotificationPopup>
       case 'booking_rejected':
         return Colors.red;
       case 'booking_completed':
+        return const Color(0xFF6366F1);
+      case 'booking_confirmed':
+        return const Color(0xFF22C55E);
+      case 'booking_cancelled':
+        return const Color(0xFFEF4444);
+      case 'follow_up_started':
+        return AppColors.primary;
+      case 'follow_up_completed':
         return const Color(0xFF6366F1);
       case 'high_pressure':
       case 'abnormal_temperature':

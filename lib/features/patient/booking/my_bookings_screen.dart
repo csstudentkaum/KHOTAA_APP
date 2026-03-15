@@ -4,8 +4,10 @@ import '../../../app/app_theme.dart';
 import '../../../models/consultation.dart';
 import '../../../services/consultation_service.dart';
 import '../../../services/notification_service.dart';
+import '../../shared/consultation_session_screen.dart';
+import '../../shared/treatment_plan_view.dart';
 
-/// My Bookings screen - shows patient's consultation appointments
+/// My Appointments screen - shows patient's consultation appointments
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
 
@@ -21,7 +23,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -40,15 +42,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'My Bookings',
+          'Appointments',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.primary,
             fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontSize: 24,
           ),
         ),
         centerTitle: true,
@@ -60,7 +65,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
           indicatorWeight: 3,
           tabs: const [
             Tab(text: 'Upcoming'),
-            Tab(text: 'Past'),
+            Tab(text: 'Follow-Up'),
+            Tab(text: 'Completed'),
           ],
         ),
       ),
@@ -79,6 +85,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
 
                 final all = snapshot.data ?? [];
                 final upcoming = all.where((c) => c.isUpcoming).toList();
+                final followUp = all.where((c) => c.isFollowUp).toList();
                 final past = all.where((c) => c.isPast).toList();
 
                 // Sort by date + time slot (soonest first)
@@ -119,6 +126,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
                   controller: _tabController,
                   children: [
                     _buildList(upcoming, isUpcoming: true),
+                    _buildFollowUpList(followUp),
                     _buildList(past, isUpcoming: false),
                   ],
                 );
@@ -170,6 +178,23 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
                 'Book an appointment with a doctor',
                 style: TextStyle(color: AppColors.textHint, fontSize: 14),
               ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () {
+                  // Pop with a result so the caller can switch to Find a Doctor tab
+                  Navigator.pop(context, 'findDoctor');
+                },
+                child: const Text(
+                  'Find a Doctor',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.primary,
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -190,6 +215,286 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
     );
   }
 
+  Widget _buildFollowUpList(List<Consultation> items) {
+    if (items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.follow_the_signs_outlined,
+              size: 80,
+              color: AppColors.textHint,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No follow-up sessions',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Active follow-up consultations will appear here',
+              style: TextStyle(color: AppColors.textHint, fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final c = items[index];
+        final dueDate = c.followUpDueDate;
+        String dueDateStr = '';
+        if (dueDate != null) {
+          dueDateStr =
+              '${_monthName(dueDate.month)} ${dueDate.day}, ${dueDate.year}';
+        }
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ConsultationSessionScreen(
+                  consultationId: c.consultationID,
+                  isDoctor: false,
+                ),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.inputBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(5),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row — same as doctor card
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        color: AppColors.primary.withAlpha(120),
+                        size: 30,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            c.doctorName?.startsWith('Dr.') == true
+                                ? c.doctorName!
+                                : 'Dr. ${c.doctorName ?? 'Unknown'}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'General Consultation',
+                            style: TextStyle(
+                              color: AppColors.textHint,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withAlpha(25),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'FOLLOW-UP',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+
+                // Date and time row
+                Row(
+                  children: [
+                    _buildInfoChip(
+                      Icons.calendar_today_outlined,
+                      c.consultationDate != null ? c.formattedDate : 'No date',
+                    ),
+                    const SizedBox(width: 16),
+                    if (c.timeSlot != null)
+                      _buildInfoChip(Icons.access_time, c.timeSlot!),
+                  ],
+                ),
+
+                // Due date
+                if (dueDateStr.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [_buildInfoChip(Icons.event, 'Due: $dueDateStr')],
+                  ),
+                ],
+
+                // Check-in status + Treatment Plan row
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    if (c.isCheckInDue && !c.hasCheckIn)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Check-in Due',
+                          style: TextStyle(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    if (c.hasCheckIn)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Check-in Done',
+                          style: TextStyle(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    const Spacer(),
+                    if (c.treatmentPlanID != null &&
+                        c.treatmentPlanID!.isNotEmpty)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TreatmentPlanView(
+                                consultationId: c.consultationID,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.description_outlined,
+                                size: 14,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Treatment Plan',
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _monthName(int month) {
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return months[month];
+  }
+
   Widget _buildCard(Consultation c, {required bool isUpcoming}) {
     Color statusColor;
     IconData statusIcon;
@@ -198,6 +503,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
       case 'accepted':
         statusColor = AppColors.success;
         statusIcon = Icons.check_circle_outline;
+        break;
+      case 'active':
+        statusColor = const Color(0xFF3B82F6);
+        statusIcon = Icons.play_circle_outline;
+        break;
+      case 'followUp':
+        statusColor = Colors.orange;
+        statusIcon = Icons.access_time;
         break;
       case 'rejected':
         statusColor = AppColors.error;
@@ -212,177 +525,197 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
         statusIcon = Icons.schedule;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(12),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConsultationSessionScreen(
+              consultationId: c.consultationID,
+              isDoctor: false,
+            ),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row
-            Row(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    color: AppColors.primary.withAlpha(120),
-                    size: 30,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        c.doctorName ?? 'Doctor',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'General Consultation',
-                        style: TextStyle(
-                          color: AppColors.textHint,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (c.status != 'accepted' && c.status != 'rejected')
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.inputBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(5),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row
+              Row(
+                children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
-                      color: statusColor.withAlpha(25),
-                      borderRadius: BorderRadius.circular(20),
+                      color: AppColors.background,
+                      shape: BoxShape.circle,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    child: Icon(
+                      Icons.person,
+                      color: AppColors.primary.withAlpha(120),
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(statusIcon, size: 14, color: statusColor),
-                        const SizedBox(width: 4),
                         Text(
-                          c.status.toUpperCase(),
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 11,
+                          c.doctorName ?? 'Doctor',
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'General Consultation',
+                          style: TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 13,
                           ),
                         ),
                       ],
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            const SizedBox(height: 16),
-
-            // Date and time row
-            Row(
-              children: [
-                _buildInfoChip(Icons.calendar_today_outlined, c.formattedDate),
-                const SizedBox(width: 16),
-                if (c.timeSlot != null)
-                  _buildInfoChip(Icons.access_time, c.timeSlot!),
-              ],
-            ),
-
-            // Cancel button for upcoming pending or accepted
-            if (isUpcoming &&
-                (c.status == 'pending' || c.status == 'accepted')) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _showCancelDialog(c),
-                  icon: const Icon(Icons.cancel_outlined, size: 18),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  label: const Text('Cancel Appointment'),
-                ),
-              ),
-            ],
-
-            // Start Consultation button for upcoming accepted (disabled until 30 min before)
-            if (isUpcoming && c.status == 'accepted') ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isChatCallAvailable(c)
-                      ? () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Consultation feature coming soon'),
-                              backgroundColor: AppColors.primary,
+                  if (c.status != 'accepted' && c.status != 'rejected')
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withAlpha(25),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(statusIcon, size: 14, color: statusColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            c.status.toUpperCase(),
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
                             ),
-                          );
-                        }
-                      : null,
-                  icon: Icon(
-                    Icons.video_call_outlined,
-                    size: 20,
-                    color: _isChatCallAvailable(c)
-                        ? Colors.white
-                        : AppColors.textHint,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+
+              // Date and time row
+              Row(
+                children: [
+                  _buildInfoChip(
+                    Icons.calendar_today_outlined,
+                    c.formattedDate,
                   ),
-                  label: Text(
-                    _isChatCallAvailable(c)
-                        ? 'Start Consultation'
-                        : 'Available 30 min before appointment',
-                    style: TextStyle(
+                  const SizedBox(width: 16),
+                  if (c.timeSlot != null)
+                    _buildInfoChip(Icons.access_time, c.timeSlot!),
+                ],
+              ),
+
+              // Cancel button for upcoming pending or accepted
+              if (isUpcoming &&
+                  (c.status == 'pending' || c.status == 'accepted')) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showCancelDialog(c),
+                    icon: const Icon(Icons.cancel_outlined, size: 18),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    label: const Text('Cancel Appointment'),
+                  ),
+                ),
+              ],
+
+              // Start Consultation button for upcoming accepted (disabled until 30 min before)
+              if (isUpcoming && c.status == 'accepted') ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isChatCallAvailable(c)
+                        ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ConsultationSessionScreen(
+                                  consultationId: c.consultationID,
+                                  isDoctor: false,
+                                ),
+                              ),
+                            );
+                          }
+                        : null,
+                    icon: Icon(
+                      Icons.video_call_outlined,
+                      size: 20,
                       color: _isChatCallAvailable(c)
                           ? Colors.white
                           : AppColors.textHint,
-                      fontWeight: FontWeight.w600,
-                      fontSize: _isChatCallAvailable(c) ? 14 : 12,
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isChatCallAvailable(c)
-                        ? AppColors.primary
-                        : Colors.grey.shade200,
-                    disabledBackgroundColor: Colors.grey.shade200,
-                    elevation: _isChatCallAvailable(c) ? 2 : 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    label: Text(
+                      _isChatCallAvailable(c)
+                          ? 'Start Consultation'
+                          : 'Available 30 min before appointment',
+                      style: TextStyle(
+                        color: _isChatCallAvailable(c)
+                            ? Colors.white
+                            : AppColors.textHint,
+                        fontWeight: FontWeight.w600,
+                        fontSize: _isChatCallAvailable(c) ? 14 : 12,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isChatCallAvailable(c)
+                          ? AppColors.primary
+                          : Colors.grey.shade200,
+                      disabledBackgroundColor: Colors.grey.shade200,
+                      elevation: _isChatCallAvailable(c) ? 2 : 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

@@ -13,15 +13,18 @@ class HelpSupportScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Help & Support',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.primary,
             fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontSize: 24,
           ),
         ),
         centerTitle: true,
@@ -81,7 +84,7 @@ class HelpSupportScreen extends StatelessWidget {
             ),
             _buildFAQ(
               'How do I cancel a booked appointment?',
-              'Navigate to "My Bookings" from your profile or home screen. '
+              'Navigate to "Appointments" from your profile or home screen. '
                   'Find the upcoming appointment you wish to cancel and tap '
                   '"Cancel Appointment". The booking will be permanently removed.',
             ),

@@ -17,16 +17,30 @@ class _WorkingHoursScreenState extends State<WorkingHoursScreen> {
 
   // Day configs: enabled, start time, end time
   final Map<String, _DayConfig> _days = {
-    'Monday': _DayConfig(enabled: true, start: '09:00 AM', end: '05:00 PM'),
-    'Tuesday': _DayConfig(enabled: true, start: '09:00 AM', end: '05:00 PM'),
-    'Wednesday': _DayConfig(enabled: true, start: '09:00 AM', end: '05:00 PM'),
-    'Thursday': _DayConfig(enabled: true, start: '09:00 AM', end: '05:00 PM'),
-    'Friday': _DayConfig(enabled: true, start: '09:00 AM', end: '05:00 PM'),
-    'Saturday': _DayConfig(enabled: true, start: '09:00 AM', end: '01:00 PM'),
-    'Sunday': _DayConfig(enabled: false, start: '09:00 AM', end: '05:00 PM'),
+    'Sunday': _DayConfig(enabled: true, start: '12:00 AM', end: '11:59 PM'),
+    'Monday': _DayConfig(enabled: true, start: '12:00 AM', end: '11:59 PM'),
+    'Tuesday': _DayConfig(enabled: true, start: '12:00 AM', end: '11:59 PM'),
+    'Wednesday': _DayConfig(enabled: true, start: '12:00 AM', end: '11:59 PM'),
+    'Thursday': _DayConfig(enabled: true, start: '12:00 AM', end: '11:59 PM'),
+    'Friday': _DayConfig(enabled: false, start: '09:00 AM', end: '05:00 PM'),
+    'Saturday': _DayConfig(enabled: false, start: '09:00 AM', end: '05:00 PM'),
   };
 
   static const _allTimeOptions = [
+    '12:00 AM',
+    '12:30 AM',
+    '01:00 AM',
+    '01:30 AM',
+    '02:00 AM',
+    '02:30 AM',
+    '03:00 AM',
+    '03:30 AM',
+    '04:00 AM',
+    '04:30 AM',
+    '05:00 AM',
+    '05:30 AM',
+    '06:00 AM',
+    '06:30 AM',
     '07:00 AM',
     '07:30 AM',
     '08:00 AM',
@@ -54,6 +68,14 @@ class _WorkingHoursScreenState extends State<WorkingHoursScreen> {
     '07:00 PM',
     '07:30 PM',
     '08:00 PM',
+    '08:30 PM',
+    '09:00 PM',
+    '09:30 PM',
+    '10:00 PM',
+    '10:30 PM',
+    '11:00 PM',
+    '11:30 PM',
+    '11:59 PM',
   ];
 
   @override
@@ -219,15 +241,18 @@ class _WorkingHoursScreenState extends State<WorkingHoursScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Working Hours',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.primary,
             fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontSize: 24,
           ),
         ),
         centerTitle: true,
