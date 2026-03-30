@@ -30,7 +30,6 @@ The system serves two user roles:
 |-------|-----------|
 | Frontend | Flutter (Dart) |
 | Backend | Firebase (Authentication, Cloud Firestore, Realtime Database, Cloud Storage, Cloud Messaging) |
-| AI Component | Deep learning model for foot image classification |
 | Video/Voice | Agora SDK (real-time communication for consultations) |
 | IoT Simulation | Wokwi-simulated smart insole (pressure and temperature sensors) |
 | Target Platforms | Android, iOS |
