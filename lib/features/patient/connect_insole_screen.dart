@@ -88,8 +88,10 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Handle app resume - check Bluetooth state and reconnect if needed
+    // Handle app resume - check permissions and Bluetooth state
     if (state == AppLifecycleState.resumed) {
+      // Recheck permissions in case user granted them in settings
+      _bluetoothService.recheckPermissions();
       _bluetoothService.initialize();
     }
   }
@@ -130,12 +132,6 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     // Check Bluetooth state first
     if (service.connectionState == InsoleConnectionState.bluetoothOff) {
       showBluetoothOffDialog(context);
-      return;
-    }
-
-    // Check permissions
-    if (service.connectionState == InsoleConnectionState.permissionDenied) {
-      showPermissionDeniedDialog(context);
       return;
     }
 
@@ -199,6 +195,11 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     } else {
       // Start scanning for devices
       await service.startScanning();
+      
+      // Check if permissions were denied after attempting to scan
+      if (service.connectionState == InsoleConnectionState.permissionDenied) {
+        if (mounted) showPermissionDeniedDialog(context);
+      }
     }
   }
 

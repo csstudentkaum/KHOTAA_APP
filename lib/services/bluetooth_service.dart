@@ -220,6 +220,23 @@ class BluetoothService extends ChangeNotifier {
       // BLUETOOTH_CONNECT: Required to connect to devices
       // LOCATION: Required on older Android versions for BLE scanning
       
+      // Check current status first
+      final scanStatus = await Permission.bluetoothScan.status;
+      final connectStatus = await Permission.bluetoothConnect.status;
+      final locationStatus = await Permission.location.status;
+      
+      // If any permission is permanently denied, we need to open settings
+      if (scanStatus.isPermanentlyDenied || 
+          connectStatus.isPermanentlyDenied || 
+          locationStatus.isPermanentlyDenied) {
+        _updateState(
+          InsoleConnectionState.permissionDenied,
+          error: 'Please allow Bluetooth permissions in settings',
+        );
+        return false;
+      }
+      
+      // Request permissions that are not yet granted
       final bluetoothScan = await Permission.bluetoothScan.request();
       final bluetoothConnect = await Permission.bluetoothConnect.request();
       final location = await Permission.location.request();
@@ -235,9 +252,27 @@ class BluetoothService extends ChangeNotifier {
         );
         return false;
       }
+      
+      // Permissions granted - reset state if it was permissionDenied
+      if (_connectionState == InsoleConnectionState.permissionDenied) {
+        _updateState(
+          InsoleConnectionState.disconnected,
+          message: 'Ready to connect',
+        );
+      }
       return true;
     } else if (Platform.isIOS) {
       // iOS only needs Bluetooth permission
+      final status = await Permission.bluetooth.status;
+      
+      if (status.isPermanentlyDenied) {
+        _updateState(
+          InsoleConnectionState.permissionDenied,
+          error: 'Please allow Bluetooth in settings',
+        );
+        return false;
+      }
+      
       final bluetooth = await Permission.bluetooth.request();
       
       if (!bluetooth.isGranted) {
@@ -246,6 +281,14 @@ class BluetoothService extends ChangeNotifier {
           error: 'Please allow Bluetooth in settings',
         );
         return false;
+      }
+      
+      // Permissions granted - reset state
+      if (_connectionState == InsoleConnectionState.permissionDenied) {
+        _updateState(
+          InsoleConnectionState.disconnected,
+          message: 'Ready to connect',
+        );
       }
       return true;
     }
@@ -262,6 +305,24 @@ class BluetoothService extends ChangeNotifier {
       return await Permission.bluetooth.isGranted;
     }
     return true;
+  }
+
+  /// Recheck permissions after returning from settings
+  /// This should be called when the app resumes to update the permission state
+  Future<void> recheckPermissions() async {
+    // Only recheck if we were in permissionDenied state
+    if (_connectionState == InsoleConnectionState.permissionDenied) {
+      final hasPerms = await hasPermissions();
+      if (hasPerms) {
+        // Permissions are now granted, update state
+        _updateState(
+          InsoleConnectionState.disconnected,
+          message: 'Ready to connect',
+        );
+        // Also check Bluetooth state
+        await _checkBluetoothState();
+      }
+    }
   }
 
   // =========================================================================
