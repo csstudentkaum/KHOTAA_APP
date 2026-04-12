@@ -7,8 +7,10 @@ import 'connect_insole_screen.dart';
 import 'booking/all_doctors_screen.dart';
 import 'profile_screen.dart';
 import 'medical_faq_chatbot_screen.dart';
+import 'services/sensor_data_service.dart';
 
 /// Patient shell - bottom tabs holder for patient app
+/// Also starts global sensor monitoring for alerts/notifications
 class PatientShell extends StatefulWidget {
   const PatientShell({super.key});
 
@@ -19,6 +21,7 @@ class PatientShell extends StatefulWidget {
 class PatientShellState extends State<PatientShell> {
   int _tab = 0;
   final GlobalKey<AllDoctorsScreenState> _allDoctorsKey = GlobalKey();
+  final SensorDataService _sensorService = SensorDataService();
 
   /// Allows child widgets to switch the active tab.
   void switchToTab(int index) {
@@ -40,6 +43,21 @@ class PatientShellState extends State<PatientShell> {
       AllDoctorsScreen(key: _allDoctorsKey),
       const ProfileScreen(),
     ];
+    
+    // Set global dialog context and start sensor monitoring
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _sensorService.setDialogContext(context);
+        _sensorService.startMonitoring();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sensorService.stopMonitoring();
+    _sensorService.clearDialogContext();
+    super.dispose();
   }
 
   @override

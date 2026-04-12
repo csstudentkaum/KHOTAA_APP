@@ -62,6 +62,20 @@ void main() async {
       }
     });
 
+    // Handle notification tap when app was in background
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('🔔 Notification tapped (background): ${message.data}');
+      // Navigation will be handled by the app based on notification type
+      // The navigatorKey in routes can be used for navigation if needed
+    });
+
+    // Check if app was opened from a terminated state via notification
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      debugPrint('🔔 App opened from notification (terminated): ${initialMessage.data}');
+      // Handle initial navigation if needed
+    }
+
     runApp(const KhotaaApp());
   } catch (e, stackTrace) {
     debugPrint('Firebase initialization error: $e');

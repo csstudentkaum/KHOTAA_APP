@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/expert_system/expert_system.dart';
+import 'services/sensor_data_service.dart';
 import 'weekly_report_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -15,33 +14,17 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
-  // Expert System Integration
-  final ExpertSystemIntegration _expertSystem = ExpertSystemIntegration();
-  ExpertSystemResult? _lastExpertResult;
+  // Shared sensor data service
+  final SensorDataService _sensorService = SensorDataService();
 
   // Connection status
   bool _isConnected = true;
-  bool _hasAbnormalReading = false; // Expert system detection
-  String _abnormalType = ''; // 'pressure', 'temperature', or 'both'
-
-  // Real-time data
-  double _temperature = 32.5;
-  double _pressure = 65.0;
-  int _stepsToday = 4523;
-  Duration _wearingDuration = const Duration(hours: 3, minutes: 45);
-
-  // Foot sensor data (simulated)
-  List<double> _leftFootPressure = [0.3, 0.5, 0.7, 0.4, 0.6];
-  List<double> _rightFootPressure = [0.4, 0.3, 0.5, 0.8, 0.4];
-  List<double> _leftFootTemp = [32.0, 32.5, 33.0, 32.2, 32.8];
-  List<double> _rightFootTemp = [32.3, 32.1, 32.8, 33.5, 32.5];
 
   // Animation controllers
   late AnimationController _pulseController;
   late AnimationController _dataUpdateController;
   late Animation<double> _pulseAnimation;
 
-  Timer? _dataTimer;
   Timer? _durationTimer;
   Timer? _statusSyncTimer;
 
@@ -49,9 +32,20 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     _initAnimations();
-    _startDataSimulation();
     _startDurationTimer();
     _syncMonitoringStatusToFirestore(active: true);
+    
+    // Listen to sensor data changes
+    _sensorService.addListener(_onSensorDataChanged);
+  }
+  
+  void _onSensorDataChanged() {
+    if (mounted) {
+      setState(() {});
+      _dataUpdateController.forward().then(
+        (_) => _dataUpdateController.reset(),
+      );
+    }
   }
 
   void _initAnimations() {
@@ -70,140 +64,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  void _startDataSimulation() {
-    _dataTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (mounted) {
-        setState(() {
-          final random = Random();
-          // Simulate temperature changes
-          _temperature = 31.5 + random.nextDouble() * 3.5;
-          _pressure = 55 + random.nextDouble() * 30;
-          _stepsToday += random.nextInt(15);
-
-          // Update foot sensor data
-          _updateFootSensorData(random);
-
-          // Check for abnormal readings (simple threshold check)
-          _checkForAbnormalReadings();
-        });
-        _dataUpdateController.forward().then(
-          (_) => _dataUpdateController.reset(),
-        );
-      }
-    });
-  }
-
-  void _updateFootSensorData(Random random) {
-    for (int i = 0; i < 5; i++) {
-      _leftFootPressure[i] = (0.2 + random.nextDouble() * 0.7).clamp(0.0, 1.0);
-      _rightFootPressure[i] = (0.2 + random.nextDouble() * 0.7).clamp(0.0, 1.0);
-      _leftFootTemp[i] = 31.5 + random.nextDouble() * 3.0;
-      _rightFootTemp[i] = 31.5 + random.nextDouble() * 3.0;
-    }
-  }
-
-  // Expert system threshold-based abnormal detection
-  // Uses IWGDF clinical thresholds for accurate risk assessment
-  void _checkForAbnormalReadings() async {
-    // Get max temperature from each foot for expert system input
-    final leftMaxTemp = _leftFootTemp.reduce(max);
-    final rightMaxTemp = _rightFootTemp.reduce(max);
-
-    // Get max pressure (convert 0-1 range to kPa for expert system)
-    final maxPressure =
-        [..._leftFootPressure, ..._rightFootPressure].reduce(max) *
-        300; // Scale to approximate kPa
-
-    // Use expert system for evaluation
-    try {
-      final result = await _expertSystem.processSensorData(
-        leftFootTemperature: leftMaxTemp,
-        rightFootTemperature: rightMaxTemp,
-        plantarPressure: maxPressure,
-        pressureBaseline: 150.0, // Default baseline in kPa
-        sensorRegion:
-            SensorRegion.metatarsal1, // Default to MTK1 for simulation
-        footSide: 'left',
-      );
-
-      if (mounted) {
-        setState(() {
-          _lastExpertResult = result;
-          _hasAbnormalReading = result.hasRisk;
-
-          // Determine abnormal type from triggered rules
-          if (result.hasRisk) {
-            final hasTemp = result.triggeredRules.any(
-              (r) => r.type == RuleType.temperatureAsymmetry,
-            );
-            final hasPressure = result.triggeredRules.any(
-              (r) =>
-                  r.type == RuleType.elevatedPressure ||
-                  r.type == RuleType.pressureAboveBaseline,
-            );
-            final hasCombined = result.triggeredRules.any(
-              (r) => r.type == RuleType.combinedRisk,
-            );
-
-            if (hasCombined || (hasTemp && hasPressure)) {
-              _abnormalType = 'both';
-            } else if (hasPressure) {
-              _abnormalType = 'pressure';
-            } else if (hasTemp) {
-              _abnormalType = 'temperature';
-            } else {
-              _abnormalType = 'both'; // Default for combined risk
-            }
-          } else {
-            _abnormalType = '';
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint('Expert system error: $e');
-      // Fallback to simple threshold check
-      _performSimpleThresholdCheck();
-    }
-  }
-
-  // Fallback simple threshold check
-  void _performSimpleThresholdCheck() {
-    const double pressureThreshold = 0.75;
-    const double tempHighThreshold = 34.0;
-    const double tempLowThreshold = 30.5;
-
-    double maxPressure = [
-      ..._leftFootPressure,
-      ..._rightFootPressure,
-    ].reduce(max);
-    double maxTemp = [..._leftFootTemp, ..._rightFootTemp].reduce(max);
-    double minTemp = [..._leftFootTemp, ..._rightFootTemp].reduce(min);
-
-    final bool abnormalPressure = maxPressure > pressureThreshold;
-    final bool abnormalTemp =
-        maxTemp > tempHighThreshold || minTemp < tempLowThreshold;
-
-    if (abnormalPressure && abnormalTemp) {
-      _hasAbnormalReading = true;
-      _abnormalType = 'both';
-    } else if (abnormalPressure) {
-      _hasAbnormalReading = true;
-      _abnormalType = 'pressure';
-    } else if (abnormalTemp) {
-      _hasAbnormalReading = true;
-      _abnormalType = 'temperature';
-    } else {
-      _hasAbnormalReading = false;
-      _abnormalType = '';
-    }
-  }
-
   void _startDurationTimer() {
     _durationTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
-        setState(() {
-          _wearingDuration += const Duration(minutes: 1);
-        });
+        _sensorService.incrementWearingDuration();
       }
     });
   }
@@ -212,9 +76,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   void dispose() {
     _statusSyncTimer?.cancel();
     _syncMonitoringStatusToFirestore(active: false);
+    _sensorService.removeListener(_onSensorDataChanged);
     _pulseController.dispose();
     _dataUpdateController.dispose();
-    _dataTimer?.cancel();
     _durationTimer?.cancel();
     super.dispose();
   }
@@ -258,14 +122,14 @@ class _DashboardScreenState extends State<DashboardScreen>
             'connected': _isConnected,
             'monitoring': true,
             'lastActive': FieldValue.serverTimestamp(),
-            'temperature': _temperature,
-            'pressure': _pressure,
-            'stepsToday': _stepsToday,
-            'wearingMinutes': _wearingDuration.inMinutes,
-            'leftFootPressure': _leftFootPressure,
-            'rightFootPressure': _rightFootPressure,
-            'hasAbnormalReading': _hasAbnormalReading,
-            'abnormalType': _abnormalType,
+            'temperature': _sensorService.temperature,
+            'pressure': _sensorService.pressure,
+            'stepsToday': _sensorService.stepsToday,
+            'wearingMinutes': _sensorService.wearingDuration.inMinutes,
+            'leftFootPressure': _sensorService.leftFootPressure,
+            'rightFootPressure': _sensorService.rightFootPressure,
+            'hasAbnormalReading': _sensorService.hasAbnormalReading,
+            'abnormalType': _sensorService.abnormalType,
           },
         }, SetOptions(merge: true))
         .catchError((_) {});
@@ -273,14 +137,14 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Get status color based on abnormal readings
   Color _getStatusColor() {
-    return _hasAbnormalReading
+    return _sensorService.hasAbnormalReading
         ? const Color(0xFFF57C00)
         : const Color(0xFF4CAF50);
   }
 
   // Get abnormal message for alert banner
   String _getAbnormalMessage() {
-    switch (_abnormalType) {
+    switch (_sensorService.abnormalType) {
       case 'pressure':
         return 'Abnormal pressure detected. Please check your foot or reduce pressure.';
       case 'temperature':
@@ -294,7 +158,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Simple alert banner - only shows when abnormal (non-intrusive)
   Widget _buildAlertBanner() {
-    if (!_hasAbnormalReading) return const SizedBox.shrink();
+    if (!_sensorService.hasAbnormalReading) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -607,7 +471,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              _hasAbnormalReading
+              _sensorService.hasAbnormalReading
                   ? Icons.info_outline
                   : Icons.check_circle_outline,
               color: _getStatusColor(),
@@ -629,7 +493,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _hasAbnormalReading ? 'Needs Attention' : 'Normal',
+                  _sensorService.hasAbnormalReading ? 'Needs Attention' : 'Normal',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -712,12 +576,12 @@ class _DashboardScreenState extends State<DashboardScreen>
             children: [
               _buildSimpleFoot(
                 label: 'Left Foot',
-                pressureValues: _leftFootPressure,
+                pressureValues: _sensorService.leftFootPressure,
                 isLeft: true,
               ),
               _buildSimpleFoot(
                 label: 'Right Foot',
-                pressureValues: _rightFootPressure,
+                pressureValues: _sensorService.rightFootPressure,
                 isLeft: false,
               ),
             ],
@@ -893,11 +757,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.thermostat_rounded,
                 label: 'Temperature',
-                value: '${_temperature.toStringAsFixed(1)}°C',
-                color: _getTempColor(_temperature),
+                value: '${_sensorService.temperature.toStringAsFixed(1)}°C',
+                color: _getTempColor(_sensorService.temperature),
                 gradient: [
-                  _getTempColor(_temperature).withOpacity(0.15),
-                  _getTempColor(_temperature).withOpacity(0.05),
+                  _getTempColor(_sensorService.temperature).withOpacity(0.15),
+                  _getTempColor(_sensorService.temperature).withOpacity(0.05),
                 ],
               ),
             ),
@@ -906,11 +770,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.compress_rounded,
                 label: 'Avg Pressure',
-                value: '${_pressure.toStringAsFixed(0)} kPa',
-                color: _getPressureColor(_pressure / 100),
+                value: '${_sensorService.pressure.toStringAsFixed(0)} kPa',
+                color: _getPressureColor(_sensorService.pressure / 100),
                 gradient: [
-                  _getPressureColor(_pressure / 100).withOpacity(0.15),
-                  _getPressureColor(_pressure / 100).withOpacity(0.05),
+                  _getPressureColor(_sensorService.pressure / 100).withOpacity(0.15),
+                  _getPressureColor(_sensorService.pressure / 100).withOpacity(0.05),
                 ],
               ),
             ),
@@ -923,7 +787,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.directions_walk_rounded,
                 label: 'Steps Today',
-                value: _formatNumber(_stepsToday),
+                value: _formatNumber(_sensorService.stepsToday),
                 color: const Color(0xFF5C6BC0),
                 gradient: [
                   const Color(0xFF5C6BC0).withOpacity(0.15),
@@ -936,7 +800,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.timer_rounded,
                 label: 'Wearing Time',
-                value: _formatDuration(_wearingDuration),
+                value: _formatDuration(_sensorService.wearingDuration),
                 color: const Color(0xFF26A69A),
                 gradient: [
                   const Color(0xFF26A69A).withOpacity(0.15),

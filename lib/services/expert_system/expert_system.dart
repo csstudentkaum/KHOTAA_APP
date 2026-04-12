@@ -1,11 +1,13 @@
-/// KHOTAA Expert System - Rule-Based Diabetic Foot Ulcer Risk Detection
-///
-/// Based on IWGDF guidelines and Niemann et al. dataset with 8 sensor regions.
-/// Designed to prevent alert fatigue - only notifies for clinically significant risk.
+// KHOTAA Expert System - Rule-Based Diabetic Foot Ulcer Risk Detection
+//
+// Based on IWGDF 2023 Guidelines:
+// - Prevention Guideline: Temperature monitoring (≥2.2°C asymmetry)
+// - Offloading Guideline: Pressure thresholds (≥200 kPa)
+// - References: Armstrong et al. (2007), Bus et al. (2016)
+//
+// Designed to prevent alert fatigue - only notifies for clinically significant risk.
 
 import 'package:flutter/material.dart';
-import '../alert_service.dart';
-import '../../models/smart_alert.dart' as alert_model;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ENUMS
@@ -248,20 +250,8 @@ class KhotaaExpertSystem {
       return ExpertSystemResult(
         riskLevel: RiskLevel.high,
         triggeredRules: allRules,
-        recommendedActions: [
-          RecommendedAction(
-            title: 'Offload Pressure',
-            description: 'Reduce pressure on ${input.sensorRegion.displayName}',
-            instructions: 'Sit down and elevate your foot for 15-20 minutes.',
-            isUrgent: true,
-          ),
-          RecommendedAction(
-            title: 'Inspect Your Foot',
-            description: 'Check for redness, swelling, or wounds',
-            isUrgent: true,
-          ),
-        ],
-        userMessage: 'High risk in ${input.sensorRegion.displayName}. Please offload and inspect.',
+        recommendedActions: _getHighRiskRecommendations(input.sensorRegion),
+        userMessage: 'High risk detected in ${input.sensorRegion.displayName}. Immediate action required.',
         shouldTriggerNotification: false,
         shouldTriggerAlert: true,
         affectedRegion: input.sensorRegion,
@@ -269,42 +259,100 @@ class KhotaaExpertSystem {
       );
     }
 
+    // MODERATE: Single factor risk
     return ExpertSystemResult(
       riskLevel: RiskLevel.moderate,
       triggeredRules: allRules,
-      recommendedActions: [
-        RecommendedAction(
-          title: tempRule != null ? 'Monitor Temperature' : 'Reduce Activity',
-          description: tempRule != null 
-            ? 'Temperature variation detected' 
-            : 'Elevated pressure detected',
-        ),
-      ],
-      userMessage: 'Foot stress detected. Monitor and reduce activity.',
+      recommendedActions: tempRule != null
+          ? _getTemperatureRecommendations(input.sensorRegion)
+          : _getPressureRecommendations(input.sensorRegion),
+      userMessage: tempRule != null
+          ? 'Temperature asymmetry detected. Monitor closely.'
+          : 'Elevated plantar pressure detected. Reduce activity.',
       shouldTriggerNotification: true,
       shouldTriggerAlert: false,
       affectedRegion: input.sensorRegion,
       timestamp: DateTime.now(),
     );
   }
+
+  /// HIGH RISK recommendations based on IWGDF 2023 Prevention Guideline
+  /// Combined temperature and pressure abnormality indicates pre-ulcerative state
+  List<RecommendedAction> _getHighRiskRecommendations(SensorRegion region) {
+    return [
+      RecommendedAction(
+        title: 'Offload Immediately',
+        description: 'Stop weight-bearing on the affected foot',
+        instructions: 'Sit or lie down. Elevate your foot above heart level for 15-20 minutes.',
+        isUrgent: true,
+      ),
+      RecommendedAction(
+        title: 'Inspect Your Foot',
+        description: 'Check for signs of tissue damage',
+        instructions: 'Look for redness, swelling, warmth, blisters, or open wounds in ${region.displayName}.',
+        isUrgent: true,
+      ),
+      RecommendedAction(
+        title: 'Contact Healthcare Provider',
+        description: 'Seek professional evaluation within 24 hours',
+        instructions: 'Combined abnormalities indicate elevated ulcer risk. Do not delay medical consultation.',
+        isUrgent: true,
+      ),
+    ];
+  }
+
+  /// TEMPERATURE recommendations based on IWGDF 2023
+  /// Temperature asymmetry ≥2.2°C may indicate inflammation or early infection
+  List<RecommendedAction> _getTemperatureRecommendations(SensorRegion region) {
+    return [
+      RecommendedAction(
+        title: 'Monitor Temperature',
+        description: 'Temperature difference detected between feet',
+        instructions: 'Rest your feet and recheck in 1-2 hours. If asymmetry persists, reduce activity.',
+        isUrgent: false,
+      ),
+      RecommendedAction(
+        title: 'Inspect the Warmer Foot',
+        description: 'Check for early signs of inflammation',
+        instructions: 'Look for redness or swelling in ${region.displayName}. Avoid tight footwear.',
+        isUrgent: false,
+      ),
+    ];
+  }
+
+  /// PRESSURE recommendations based on IWGDF 2023 Offloading Guideline
+  /// Peak plantar pressure ≥200 kPa increases ulceration risk
+  List<RecommendedAction> _getPressureRecommendations(SensorRegion region) {
+    return [
+      RecommendedAction(
+        title: 'Reduce Weight-Bearing',
+        description: 'Lower plantar pressure to prevent tissue damage',
+        instructions: 'Take a seated break. Avoid prolonged standing or walking.',
+        isUrgent: false,
+      ),
+      RecommendedAction(
+        title: 'Check Your Footwear',
+        description: 'Ensure proper cushioning and fit',
+        instructions: 'Use therapeutic footwear with pressure redistribution. Avoid flat or hard-soled shoes.',
+        isUrgent: false,
+      ),
+    ];
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INTEGRATION SERVICE (AlertService Bridge)
+// INTEGRATION SERVICE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class ExpertSystemIntegration {
   final KhotaaExpertSystem _expertSystem = KhotaaExpertSystem();
-  final AlertService _alertService = AlertService();
 
   static final ExpertSystemIntegration _instance = ExpertSystemIntegration._internal();
   factory ExpertSystemIntegration() => _instance;
   ExpertSystemIntegration._internal();
 
-  DateTime? _lastAlertTime;
-  static const Duration _alertCooldown = Duration(minutes: 5);
-
-  /// Process sensor data and create alerts if needed
+  /// Process sensor data and return evaluation result
+  /// NOTE: Alert/notification handling is done by SensorNotificationService
   Future<ExpertSystemResult> processSensorData({
     required double leftFootTemperature,
     required double rightFootTemperature,
@@ -322,66 +370,8 @@ class ExpertSystemIntegration {
       footSide: footSide,
     );
 
-    final result = _expertSystem.evaluateSensorData(input);
-    await _handleResult(result, input);
-    return result;
+    return _expertSystem.evaluateSensorData(input);
   }
-
-  Future<void> _handleResult(ExpertSystemResult result, SensorInput input) async {
-    if (!result.hasRisk) return;
-
-    // Cooldown check
-    if (_lastAlertTime != null &&
-        DateTime.now().difference(_lastAlertTime!) < _alertCooldown) {
-      return;
-    }
-
-    if (result.shouldTriggerAlert || result.shouldTriggerNotification) {
-      await _createAlert(result, input);
-      _lastAlertTime = DateTime.now();
-    }
-  }
-
-  Future<void> _createAlert(ExpertSystemResult result, SensorInput input) async {
-    try {
-      final alertRiskLevel = switch (result.riskLevel) {
-        RiskLevel.high => alert_model.RiskLevel.high,
-        RiskLevel.moderate => alert_model.RiskLevel.medium,
-        RiskLevel.normal => alert_model.RiskLevel.low,
-      };
-
-      await _alertService.createCustomAlert(
-        title: result.riskLevel == RiskLevel.high ? 'High Risk Alert' : 'Foot Stress Detected',
-        shortDescription: result.userMessage,
-        detailedExplanation: _buildExplanation(result, input),
-        riskLevel: alertRiskLevel,
-        category: alert_model.RiskCategory.pressure,
-        recommendationTitle: result.recommendedActions.isNotEmpty
-            ? result.recommendedActions.first.title : null,
-        recommendationDescription: result.recommendedActions.isNotEmpty
-            ? result.recommendedActions.first.description : null,
-        instructions: result.recommendedActions.isNotEmpty
-            ? result.recommendedActions.first.instructions : null,
-      );
-    } catch (e) {
-      debugPrint('Error creating alert: $e');
-    }
-  }
-
-  String _buildExplanation(ExpertSystemResult result, SensorInput input) {
-    final buf = StringBuffer('Expert system findings:\n\n');
-    for (final rule in result.triggeredRules) {
-      buf.writeln('• ${rule.description}');
-    }
-    buf.writeln('\nReadings:');
-    buf.writeln('• Left temp: ${input.leftFootTemperature.toStringAsFixed(1)}°C');
-    buf.writeln('• Right temp: ${input.rightFootTemperature.toStringAsFixed(1)}°C');
-    buf.writeln('• Pressure: ${input.plantarPressure.toStringAsFixed(0)} kPa');
-    buf.writeln('• Region: ${input.sensorRegion.displayName}');
-    return buf.toString();
-  }
-
-  void resetCooldown() => _lastAlertTime = null;
 }
 
 extension ExpertSystemContext on BuildContext {

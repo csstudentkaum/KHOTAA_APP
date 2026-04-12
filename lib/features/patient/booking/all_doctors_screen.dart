@@ -131,11 +131,22 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final canGoBack = Navigator.canPop(context);
+    
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: canGoBack
+            ? IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(
+                  Icons.arrow_back_ios_rounded,
+                  color: AppColors.primary,
+                ),
+              )
+            : null,
         title: const Text(
           'Find a Doctor',
           style: TextStyle(

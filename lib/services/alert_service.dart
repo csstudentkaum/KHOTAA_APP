@@ -54,7 +54,7 @@ class AlertService extends ChangeNotifier {
 
   /// Clear old cache when version changes (to fix corrupted data)
   Future<void> _clearOldCacheIfNeeded() async {
-    const currentVersion = 3; // Increment this when changing alert structure
+    const currentVersion = 5; // Increment to clear old IWGDF text from alerts
     final prefs = await SharedPreferences.getInstance();
     final savedVersion =
         prefs.getInt('alerts_cache_version_$_currentPatientId') ?? 0;
@@ -343,64 +343,83 @@ class AlertService extends ChangeNotifier {
       return;
     }
 
-    // Define sample alerts with proper notificationType
+    // Define sample alerts with IWGDF 2023 recommendations
     // 2 unread health alerts, 1 read health alert
     // 2 read appointment alerts
     final samples = [
       SmartAlert(
         id: 'sample_health_pressure_001',
         title: 'High Pressure Alert',
-        shortDescription: 'Excessive pressure on left foot heel',
+        shortDescription: 'Excessive pressure on left foot heel (265 kPa)',
         detailedExplanation:
             'Your smart insole has detected high pressure (265 kPa) on your left foot '
             'in the heel region.\n\n'
-            'Prolonged high pressure can lead to tissue damage and increase the risk '
-            'of diabetic foot ulcers. Taking a break and adjusting your footwear is recommended.',
+            'According to IWGDF 2023 Guidelines: Peak pressure ≥200 kPa indicates elevated '
+            'ulcer risk. Pressure management is critical for diabetic foot care.',
         riskLevel: RiskLevel.high,
         category: RiskCategory.pressure,
         timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
         patientId: _currentPatientId!,
         notificationType: NotificationType.health,
-        recommendationTitle: 'Reduce Standing Time',
-        recommendationDescription: 'Rest your feet for 15-20 minutes',
+        // IWGDF 2023: Pressure Offloading Required
+        recommendationTitle: 'Pressure Offloading Required',
+        recommendationDescription:
+            'Reduce weight-bearing immediately. Use offloading footwear or devices if available.',
         instructions:
-            'Sit down and elevate your feet above heart level. This helps reduce swelling and pressure.',
+            '1. Stop current activity and rest immediately\n'
+            '2. Use therapeutic footwear with custom insoles\n'
+            '3. Consider walking aids to redistribute pressure\n'
+            '4. Avoid barefoot walking\n'
+            '5. Consult healthcare provider if pressure persists',
       ),
       SmartAlert(
         id: 'sample_health_temp_001',
         title: 'Temperature Alert',
-        shortDescription: 'Elevated temperature difference detected',
+        shortDescription: 'Elevated temperature difference detected (3.1°C)',
         detailedExplanation:
             'Your smart insole has detected a temperature difference of 3.1°C between feet.\n\n'
-            'Temperature asymmetry >2.2°C can indicate inflammation or early ulcer risk. '
-            'Applying a cool compress and monitoring is recommended.',
+            'According to IWGDF 2023 Guidelines: Temperature asymmetry ≥2.2°C between '
+            'corresponding foot regions indicates inflammation and elevated ulcer risk.',
         riskLevel: RiskLevel.high,
         category: RiskCategory.temperature,
         timestamp: DateTime.now().subtract(const Duration(hours: 1)),
         patientId: _currentPatientId!,
         notificationType: NotificationType.health,
         isViewed: true,
-        recommendationTitle: 'Cool Down Your Feet',
-        recommendationDescription: 'Apply cool compress for 10-15 minutes',
+        // IWGDF 2023: Monitor Foot Temperature
+        recommendationTitle: 'Monitor Foot Temperature',
+        recommendationDescription:
+            'Rest and monitor. Contact healthcare provider if asymmetry persists >48 hours.',
         instructions:
-            'Use a cool (not cold) compress on your foot. Avoid ice directly on skin. Monitor for changes.',
+            '1. Rest and elevate affected foot\n'
+            '2. Apply cool compress (not ice) to warmer area\n'
+            '3. Check for redness, swelling, or other signs of infection\n'
+            '4. Monitor temperature every 4 hours\n'
+            '5. Seek medical attention if difference increases or persists >48 hours',
       ),
       SmartAlert(
         id: 'sample_health_pressure_002',
         title: 'Pressure Distribution Notice',
-        shortDescription: 'Uneven pressure distribution detected',
+        shortDescription: 'Elevated pressure detected (195 kPa)',
         detailedExplanation:
             'Your smart insole has detected pressure above baseline (195 kPa) on metatarsal region.\n\n'
-            'This may be due to shoe wear or walking habits. Consider checking your footwear.',
+            'According to IWGDF 2023 Guidelines: Monitor pressure levels approaching the '
+            '≥200 kPa threshold to prevent complications.',
         riskLevel: RiskLevel.medium,
         category: RiskCategory.pressure,
         timestamp: DateTime.now().subtract(const Duration(hours: 3)),
         patientId: _currentPatientId!,
         notificationType: NotificationType.health,
-        recommendationTitle: 'Check Footwear',
-        recommendationDescription: 'Inspect shoes for uneven wear',
+        // IWGDF 2023: Adjust Weight Distribution
+        recommendationTitle: 'Adjust Weight Distribution',
+        recommendationDescription:
+            'Shift weight periodically. Check footwear fit and consider orthotic insoles.',
         instructions:
-            'Inspect your shoes for wear. Consider diabetic-friendly footwear with proper cushioning.',
+            '1. Shift weight between feet every 15-20 minutes\n'
+            '2. Ensure proper footwear fit (not too tight)\n'
+            '3. Consider cushioned or therapeutic insoles\n'
+            '4. Avoid prolonged standing in the same position\n'
+            '5. Schedule footwear evaluation with healthcare provider',
       ),
       SmartAlert(
         id: 'sample_appt_001',

@@ -85,8 +85,13 @@ class _PatientHomePageState extends State<PatientHomePage>
 
   Future<void> _initializeAlertService() async {
     try {
-      // Initialize with a patient ID (in production, get from auth service)
-      await AlertService().initialize('patient_001');
+      // Get the actual user ID from Firebase Auth
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        debugPrint('No user logged in, skipping alert service init');
+        return;
+      }
+      await AlertService().initialize(user.uid);
       // Add sample alerts for demo
       await AlertService().addSampleAlerts();
     } catch (e) {
