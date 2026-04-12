@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../shared/in_app_notification_popup.dart';
 import '../../shared/widgets/bottom_nav_bar.dart';
+import '../../services/local_notification_service.dart';
 import 'patient_home_page.dart';
 import 'ai_doctor_screen.dart';
 import 'connect_insole_screen.dart';
 import 'booking/all_doctors_screen.dart';
 import 'profile_screen.dart';
 import 'medical_faq_chatbot_screen.dart';
+import 'preventive_recommendations_screen.dart';
 import 'services/sensor_data_service.dart';
 
 /// Patient shell - bottom tabs holder for patient app
@@ -22,6 +25,7 @@ class PatientShellState extends State<PatientShell> {
   int _tab = 0;
   final GlobalKey<AllDoctorsScreenState> _allDoctorsKey = GlobalKey();
   final SensorDataService _sensorService = SensorDataService();
+  StreamSubscription<String>? _notificationTapSub;
 
   /// Allows child widgets to switch the active tab.
   void switchToTab(int index) {
@@ -51,10 +55,25 @@ class PatientShellState extends State<PatientShell> {
         _sensorService.startMonitoring();
       }
     });
+    
+    // Listen for notification taps to navigate to appropriate screen
+    _notificationTapSub = LocalNotificationService().onNotificationTap.listen(_handleNotificationTap);
+  }
+  
+  void _handleNotificationTap(String payload) {
+    debugPrint('📱 Notification tapped with payload: $payload');
+    // Navigate to Preventive Tips screen when notification is tapped
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PreventiveRecommendationsScreen()),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _notificationTapSub?.cancel();
     _sensorService.stopMonitoring();
     _sensorService.clearDialogContext();
     super.dispose();

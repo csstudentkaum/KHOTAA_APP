@@ -125,6 +125,7 @@ class ExpertSystemResult {
   final bool shouldTriggerNotification;
   final bool shouldTriggerAlert;
   final SensorRegion? affectedRegion;
+  final String affectedFoot; // "left" or "right"
   final DateTime timestamp;
 
   const ExpertSystemResult({
@@ -135,6 +136,7 @@ class ExpertSystemResult {
     required this.shouldTriggerNotification,
     required this.shouldTriggerAlert,
     this.affectedRegion,
+    this.affectedFoot = 'left',
     required this.timestamp,
   });
 
@@ -149,6 +151,13 @@ class ExpertSystemResult {
   );
 
   bool get hasRisk => riskLevel != RiskLevel.normal;
+  
+  /// Get display name with foot side (e.g., "Left Metatarsal 1 (MTK1)")
+  String get fullRegionName {
+    final footLabel = affectedFoot == 'left' ? 'Left' : 'Right';
+    final regionName = affectedRegion?.displayName ?? 'Foot';
+    return '$footLabel $regionName';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -238,12 +247,15 @@ class KhotaaExpertSystem {
     if (hasCombined) {
       allRules.add(TriggeredRule(
         type: RuleType.combinedRisk,
-        description: 'Combined temperature and pressure abnormality in ${input.sensorRegion.displayName}',
+        description: 'Combined temperature and pressure abnormality in ${input.footSide} ${input.sensorRegion.displayName}',
         region: input.sensorRegion,
       ));
     }
 
     if (allRules.isEmpty) return ExpertSystemResult.normal();
+
+    final footLabel = input.footSide == 'left' ? 'Left' : 'Right';
+    final regionName = input.sensorRegion.displayName;
 
     // HIGH: combined risk, MODERATE: single factor
     if (hasCombined) {
@@ -251,10 +263,11 @@ class KhotaaExpertSystem {
         riskLevel: RiskLevel.high,
         triggeredRules: allRules,
         recommendedActions: _getHighRiskRecommendations(input.sensorRegion),
-        userMessage: 'High risk detected in ${input.sensorRegion.displayName}. Immediate action required.',
+        userMessage: 'High risk detected in $footLabel $regionName. Immediate action required.',
         shouldTriggerNotification: false,
         shouldTriggerAlert: true,
         affectedRegion: input.sensorRegion,
+        affectedFoot: input.footSide,
         timestamp: DateTime.now(),
       );
     }
@@ -267,11 +280,12 @@ class KhotaaExpertSystem {
           ? _getTemperatureRecommendations(input.sensorRegion)
           : _getPressureRecommendations(input.sensorRegion),
       userMessage: tempRule != null
-          ? 'Temperature asymmetry detected. Monitor closely.'
-          : 'Elevated plantar pressure detected. Reduce activity.',
+          ? 'Temperature asymmetry detected in $footLabel foot. Monitor closely.'
+          : 'Elevated pressure in $footLabel $regionName. Reduce activity.',
       shouldTriggerNotification: true,
       shouldTriggerAlert: false,
       affectedRegion: input.sensorRegion,
+      affectedFoot: input.footSide,
       timestamp: DateTime.now(),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -16,6 +17,10 @@ class LocalNotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  
+  /// Stream for notification tap events
+  final StreamController<String> _onTapController = StreamController<String>.broadcast();
+  Stream<String> get onNotificationTap => _onTapController.stream;
 
   /// Initialize the plugin. Call once at app startup.
   Future<void> initialize() async {
@@ -136,7 +141,9 @@ class LocalNotificationService {
 
   void _onNotificationTapped(NotificationResponse response) {
     debugPrint('🔔 Notification tapped: ${response.payload}');
-    // Navigation is handled by the in-app listener already
+    // Emit tap event so UI can navigate
+    final payload = response.payload ?? '';
+    _onTapController.add(payload);
   }
 
   /// Play the notification sound directly (works even on iOS simulator).

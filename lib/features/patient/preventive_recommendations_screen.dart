@@ -79,10 +79,8 @@ class _PreventiveRecommendationsScreenState
         return RecommendationType.pressure;
       case alert_model.RiskCategory.temperature:
         return RecommendationType.temperature;
-      case alert_model.RiskCategory.movement:
-      case alert_model.RiskCategory.general:
-        // Map movement/general to pressure as fallback (since we only have 2 types now)
-        return RecommendationType.pressure;
+      case alert_model.RiskCategory.combined:
+        return RecommendationType.pressure; // Combined uses pressure type
     }
   }
 
@@ -92,9 +90,8 @@ class _PreventiveRecommendationsScreenState
         return Icons.compress;
       case alert_model.RiskCategory.temperature:
         return Icons.thermostat;
-      case alert_model.RiskCategory.movement:
-      case alert_model.RiskCategory.general:
-        return Icons.health_and_safety;
+      case alert_model.RiskCategory.combined:
+        return Icons.warning_amber_rounded;
     }
   }
 
@@ -104,9 +101,8 @@ class _PreventiveRecommendationsScreenState
         return 'Reduce standing time and rest your feet. Consider changing to more supportive footwear with proper cushioning.';
       case alert_model.RiskCategory.temperature:
         return 'Apply a cool compress to the affected area for 10-15 minutes. Monitor for any signs of inflammation.';
-      case alert_model.RiskCategory.movement:
-      case alert_model.RiskCategory.general:
-        return 'Follow general foot care guidelines and consult your healthcare provider if symptoms persist.';
+      case alert_model.RiskCategory.combined:
+        return 'Rest your feet immediately. Check for any redness or swelling. Contact your healthcare provider if symptoms persist.';
     }
   }
 
@@ -688,8 +684,17 @@ class _RecommendationCard extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(dateTime);
 
-    if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}min ago';
+    } else if (diff.inHours < 24) {
+      final hours = diff.inHours;
+      final minutes = diff.inMinutes % 60;
+      if (minutes > 0) {
+        return '${hours}h ${minutes}min ago';
+      }
+      return '${hours}h ago';
     } else if (diff.inDays == 1) {
       return 'Yesterday';
     } else {

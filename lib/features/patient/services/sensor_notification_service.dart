@@ -4,6 +4,7 @@ import '../../../services/local_notification_service.dart';
 import '../../../services/alert_service.dart';
 import '../../../models/smart_alert.dart' as alert_model;
 import '../widgets/medical_alert_dialog.dart';
+import 'sensor_data_service.dart';
 
 /// Sensor Notification Service
 /// 
@@ -110,7 +111,7 @@ class SensorNotificationService {
 
     _lastNotificationTime = DateTime.now();
 
-    final region = result.affectedRegion?.displayName ?? 'Foot';
+    final region = result.fullRegionName; // Includes left/right
     
     // Determine notification content based on triggered rule type
     final hasTemp = result.triggeredRules.any(
@@ -146,7 +147,7 @@ class SensorNotificationService {
 
   /// Send high priority notification when app is in background/terminated
   Future<void> _sendHighPriorityNotification(ExpertSystemResult result) async {
-    final region = result.affectedRegion?.displayName ?? 'Foot';
+    final region = result.fullRegionName;
 
     const title = '⚠️ High Risk - Immediate Action Required';
     final body = 'Combined temperature and pressure abnormality in $region. '
@@ -168,22 +169,48 @@ class SensorNotificationService {
       final hasTemp = result.triggeredRules.any(
         (r) => r.type == RuleType.temperatureAsymmetry,
       );
+      final hasPressure = result.triggeredRules.any(
+        (r) => r.type == RuleType.elevatedPressure || r.type == RuleType.pressureAboveBaseline,
+      );
 
       // Determine category based on triggered rules
-      final category = hasTemp
-          ? alert_model.RiskCategory.temperature
-          : alert_model.RiskCategory.pressure;
+      alert_model.RiskCategory category;
+      if (hasTemp && hasPressure) {
+        category = alert_model.RiskCategory.combined;
+      } else if (hasTemp) {
+        category = alert_model.RiskCategory.temperature;
+      } else {
+        category = alert_model.RiskCategory.pressure;
+      }
 
       // Get first recommendation from expert system
       final recommendation = result.recommendedActions.isNotEmpty
           ? result.recommendedActions.first
           : null;
 
-      // Alert titles (based on IWGDF 2023 Guidelines)
+      // Alert titles
+      String title;
+      if (hasTemp && hasPressure) {
+        title = 'Pressure & Temperature Alert';
+      } else if (isHighRisk) {
+        title = 'High Risk Alert';
+      } else if (hasTemp) {
+        title = 'Temperature Asymmetry';
+      } else {
+        title = 'Elevated Pressure';
+      }
+
+      // Get foot and region info from result
+      final affectedFoot = result.affectedFoot;
+      final regionName = result.affectedRegion?.displayName ?? 'Foot';
+      
+      // Get actual sensor values from SensorDataService (always show both)
+      final sensorService = SensorDataService();
+      final pressure = sensorService.pressure;
+      final temperature = sensorService.temperature;
+      
       await _alertService.createCustomAlert(
-        title: isHighRisk
-            ? 'High Risk Alert'
-            : (hasTemp ? 'Temperature Asymmetry' : 'Elevated Pressure'),
+        title: title,
         shortDescription: result.userMessage,
         detailedExplanation: _buildExplanation(result),
         riskLevel: isHighRisk ? alert_model.RiskLevel.high : alert_model.RiskLevel.medium,
@@ -191,6 +218,12 @@ class SensorNotificationService {
         recommendationTitle: recommendation?.title,
         recommendationDescription: recommendation?.description,
         instructions: recommendation?.instructions,
+        sensorData: {
+          'footSide': affectedFoot == 'left' ? 'Left Foot' : 'Right Foot',
+          'sensorRegion': regionName,
+          'pressureValue': pressure,
+          'temperatureValue': temperature,
+        },
       );
 
       debugPrint('✅ Alert saved to AlertService');
@@ -201,16 +234,9 @@ class SensorNotificationService {
 
   /// Build detailed explanation from expert system result
   String _buildExplanation(ExpertSystemResult result) {
-    final buf = StringBuffer('IWGDF 2023 Analysis:\n\n');
+    final buf = StringBuffer('Expert system findings:\n\n');
     for (final rule in result.triggeredRules) {
       buf.writeln('• ${rule.description}');
-    }
-    if (result.recommendedActions.length > 1) {
-      buf.writeln('\nAdditional Recommendations:');
-      for (int i = 1; i < result.recommendedActions.length; i++) {
-        final action = result.recommendedActions[i];
-        buf.writeln('• ${action.title}: ${action.description}');
-      }
     }
     return buf.toString();
   }

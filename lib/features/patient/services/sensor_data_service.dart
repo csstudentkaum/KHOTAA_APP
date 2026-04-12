@@ -86,19 +86,33 @@ class SensorDataService extends ChangeNotifier {
   void _updateSensorData() async {
     final random = Random();
     
-    // Simulate HIGH values to trigger alerts for testing
+    // Simulate sensor values
     _temperature = 34.0 + random.nextDouble() * 2.0;
     _pressure = 200 + random.nextDouble() * 100;
     _stepsToday += random.nextInt(15);
 
-    // Update foot sensor data with higher values
+    // ────────────────────────────────────────────────────────────────────
+    // TESTING MODES - Change these to test different scenarios:
+    // ────────────────────────────────────────────────────────────────────
+    // Mode 1: NOTIFICATION (MODERATE) - High pressure ONLY
+    //         Pressure: ≥200 kPa, Temp difference: <2.2°C
+    //
+    // Mode 2: ALERT (HIGH) - Both high pressure AND temp asymmetry
+    //         Pressure: ≥200 kPa, Temp difference: ≥2.2°C
+    //
+    // Mode 3: NORMAL - No notifications
+    //         Pressure: <200 kPa, Temp difference: <2.2°C
+    // ────────────────────────────────────────────────────────────────────
+    
+    // Current mode: NOTIFICATION (high pressure only, no temp asymmetry)
     for (int i = 0; i < 5; i++) {
-      // Higher pressure values for testing alerts
+      // High pressure to trigger notification
       _leftFootPressure[i] = (0.7 + random.nextDouble() * 0.3).clamp(0.0, 1.0);
       _rightFootPressure[i] = (0.7 + random.nextDouble() * 0.3).clamp(0.0, 1.0);
-      // Create temperature asymmetry (>2.2°C difference) for testing
-      _leftFootTemp[i] = 32.0 + random.nextDouble() * 1.0;
-      _rightFootTemp[i] = 35.0 + random.nextDouble() * 1.5;
+      
+      // Similar temperatures (difference < 2.2°C) - NO temp asymmetry
+      _leftFootTemp[i] = 33.0 + random.nextDouble() * 0.5;
+      _rightFootTemp[i] = 33.5 + random.nextDouble() * 0.5;
     }
 
     // Process through expert system
@@ -111,7 +125,16 @@ class SensorDataService extends ChangeNotifier {
   Future<void> _checkForAbnormalReadings() async {
     final leftMaxTemp = _leftFootTemp.reduce(max);
     final rightMaxTemp = _rightFootTemp.reduce(max);
+    final maxPressureIndex = _leftFootPressure.indexOf(_leftFootPressure.reduce(max));
     final maxPressure = [..._leftFootPressure, ..._rightFootPressure].reduce(max) * 300;
+    
+    // Determine which foot has higher pressure
+    final leftMaxPressure = _leftFootPressure.reduce(max);
+    final rightMaxPressure = _rightFootPressure.reduce(max);
+    final footSide = leftMaxPressure > rightMaxPressure ? 'left' : 'right';
+    
+    // Map pressure index to sensor region
+    final sensorRegion = _indexToRegion(maxPressureIndex);
 
     try {
       final result = await _expertSystem.processSensorData(
@@ -119,8 +142,8 @@ class SensorDataService extends ChangeNotifier {
         rightFootTemperature: rightMaxTemp,
         plantarPressure: maxPressure,
         pressureBaseline: 150.0,
-        sensorRegion: SensorRegion.metatarsal1,
-        footSide: 'left',
+        sensorRegion: sensorRegion,
+        footSide: footSide,
       );
 
       _lastResult = result;
@@ -155,6 +178,24 @@ class SensorDataService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Expert system error: $e');
+    }
+  }
+
+  /// Map pressure array index to anatomical sensor region
+  SensorRegion _indexToRegion(int index) {
+    switch (index) {
+      case 0:
+        return SensorRegion.metatarsal1;
+      case 1:
+        return SensorRegion.metatarsal2;
+      case 2:
+        return SensorRegion.metatarsal3;
+      case 3:
+        return SensorRegion.metatarsal4;
+      case 4:
+        return SensorRegion.heel;
+      default:
+        return SensorRegion.metatarsal1;
     }
   }
 

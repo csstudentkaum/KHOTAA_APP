@@ -56,8 +56,7 @@ enum RiskLevel {
 enum RiskCategory {
   pressure,
   temperature,
-  movement,
-  general,
+  combined, // Both pressure AND temperature abnormal
 }
 
 /// Extension to add helper methods to RiskLevel
@@ -115,10 +114,8 @@ extension RiskCategoryExtension on RiskCategory {
         return 'Pressure';
       case RiskCategory.temperature:
         return 'Temperature';
-      case RiskCategory.movement:
-        return 'Movement';
-      case RiskCategory.general:
-        return 'General';
+      case RiskCategory.combined:
+        return 'Combined';
     }
   }
 
@@ -128,10 +125,8 @@ extension RiskCategoryExtension on RiskCategory {
         return Icons.compress;
       case RiskCategory.temperature:
         return Icons.thermostat;
-      case RiskCategory.movement:
-        return Icons.directions_walk;
-      case RiskCategory.general:
-        return Icons.health_and_safety;
+      case RiskCategory.combined:
+        return Icons.warning_amber_rounded;
     }
   }
 
@@ -141,10 +136,8 @@ extension RiskCategoryExtension on RiskCategory {
         return 'assets/images/pressure_risk.png';
       case RiskCategory.temperature:
         return 'assets/images/temperature_risk.png';
-      case RiskCategory.movement:
-        return 'assets/images/movement_risk.png';
-      case RiskCategory.general:
-        return 'assets/images/general_risk.png';
+      case RiskCategory.combined:
+        return 'assets/images/pressure_risk.png';
     }
   }
 }
@@ -246,7 +239,7 @@ class SmartAlert {
       ),
       category: RiskCategory.values.firstWhere(
         (e) => e.name == data['category'],
-        orElse: () => RiskCategory.general,
+        orElse: () => RiskCategory.pressure,
       ),
       notificationType: NotificationType.values.firstWhere(
         (e) => e.name == data['notificationType'],
@@ -340,7 +333,7 @@ class SmartAlert {
     final isAbnormalTemp = temperatureValue > 38.0 || temperatureValue < 34.5;
 
     if (isAbnormalPressure && isAbnormalTemp) {
-      category = RiskCategory.pressure;
+      category = RiskCategory.combined;
       title = 'Pressure & Temperature Alert';
       shortDescription = 'Please check your $footSide foot';
       detailedExplanation = 
@@ -379,7 +372,7 @@ class SmartAlert {
           : 'Keep your feet warm and check for any signs of cold or numbness.';
     } else {
       // Normal reading - create a simple status update
-      category = RiskCategory.general;
+      category = RiskCategory.pressure;
       title = 'Foot Status';
       shortDescription = 'Normal readings recorded';
       detailedExplanation = 

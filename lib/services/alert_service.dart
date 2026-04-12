@@ -193,6 +193,7 @@ class AlertService extends ChangeNotifier {
     String? recommendationTitle,
     String? recommendationDescription,
     String? instructions,
+    Map<String, dynamic>? sensorData,
   }) async {
     if (_currentPatientId == null) {
       throw Exception('Alert service not initialized');
@@ -210,6 +211,7 @@ class AlertService extends ChangeNotifier {
       recommendationTitle: recommendationTitle,
       recommendationDescription: recommendationDescription,
       instructions: instructions,
+      sensorData: sensorData,
     );
 
     // Save to Firestore
@@ -428,7 +430,7 @@ class AlertService extends ChangeNotifier {
         detailedExplanation:
             'You have an appointment scheduled with Dr. Abdullah for your regular foot checkup.',
         riskLevel: RiskLevel.low,
-        category: RiskCategory.general,
+        category: RiskCategory.pressure,
         timestamp: DateTime.now().subtract(const Duration(days: 1)),
         patientId: _currentPatientId!,
         notificationType: NotificationType.appointment,
@@ -441,7 +443,7 @@ class AlertService extends ChangeNotifier {
         detailedExplanation:
             'Its been 4 weeks since your last checkup. Please schedule your monthly follow-up appointment.',
         riskLevel: RiskLevel.low,
-        category: RiskCategory.general,
+        category: RiskCategory.pressure,
         timestamp: DateTime.now().subtract(const Duration(days: 2)),
         patientId: _currentPatientId!,
         notificationType: NotificationType.appointment,
@@ -494,7 +496,7 @@ class AlertService extends ChangeNotifier {
       ),
       category: RiskCategory.values.firstWhere(
         (e) => e.name == json['category'],
-        orElse: () => RiskCategory.general,
+        orElse: () => RiskCategory.pressure,
       ),
       timestamp: DateTime.parse(json['timestamp']),
       isViewed: json['isViewed'] ?? false,

@@ -160,10 +160,10 @@ class _RiskExplanationScreenState extends State<RiskExplanationScreen>
                   // Category Card
                   _buildCategoryCard(),
                   const SizedBox(height: 20),
-                  // Detailed Explanation
+                  // What This Means
                   _buildExplanationCard(),
                   const SizedBox(height: 20),
-                  // Sensor Data (if available)
+                  // Sensor Readings Card
                   if (widget.alert.sensorData != null) ...[
                     _buildSensorDataCard(),
                     const SizedBox(height: 20),
@@ -290,7 +290,6 @@ class _RiskExplanationScreenState extends State<RiskExplanationScreen>
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: Colors.grey[400]),
         ],
       ),
     );
@@ -341,7 +340,7 @@ class _RiskExplanationScreenState extends State<RiskExplanationScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            widget.alert.detailedExplanation,
+            _cleanExplanation(widget.alert.detailedExplanation),
             style: const TextStyle(
               fontSize: 16,
               color: Color(0xFF4B5563),
@@ -351,6 +350,17 @@ class _RiskExplanationScreenState extends State<RiskExplanationScreen>
         ],
       ),
     );
+  }
+
+  String _cleanExplanation(String text) {
+    var cleaned = text.replaceAll('IWGDF 2023 Analysis:', 'Expert system findings:');
+
+    final additionalIndex = cleaned.indexOf('Additional Recommendations:');
+    if (additionalIndex >= 0) {
+      cleaned = cleaned.substring(0, additionalIndex).trim();
+    }
+
+    return cleaned;
   }
 
   Widget _buildSensorDataCard() {
