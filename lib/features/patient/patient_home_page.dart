@@ -769,17 +769,7 @@ class _PatientHomePageState extends State<PatientHomePage>
               ),
             ),
             TextButton(
-              onPressed: () async {
-                final result = await Navigator.push<String>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
-                );
-                if (result == 'findDoctor') {
-                  final shellState = context
-                      .findAncestorStateOfType<PatientShellState>();
-                  shellState?.switchToTab(3);
-                }
-              },
+              onPressed: _navigateToBookings,
               child: const Text('See All'),
             ),
           ],
@@ -880,17 +870,7 @@ class _PatientHomePageState extends State<PatientHomePage>
     final dayName = date != null ? _getDayAbbr(date.weekday) : '';
 
     return GestureDetector(
-      onTap: () async {
-        final result = await Navigator.push<String>(
-          context,
-          MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
-        );
-        if (result == 'findDoctor') {
-          final shellState = context
-              .findAncestorStateOfType<PatientShellState>();
-          shellState?.switchToTab(3);
-        }
-      },
+      onTap: _navigateToBookings,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -961,17 +941,7 @@ class _PatientHomePageState extends State<PatientHomePage>
             ),
             // More options button
             GestureDetector(
-              onTap: () async {
-                final result = await Navigator.push<String>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
-                );
-                if (result == 'findDoctor') {
-                  final shellState = context
-                      .findAncestorStateOfType<PatientShellState>();
-                  shellState?.switchToTab(3);
-                }
-              },
+              onTap: _navigateToBookings,
               child: Container(
                 width: 32,
                 height: 32,
@@ -990,6 +960,17 @@ class _PatientHomePageState extends State<PatientHomePage>
         ),
       ),
     );
+  }
+
+  Future<void> _navigateToBookings() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
+    );
+    if (result == 'findDoctor') {
+      final shellState = context.findAncestorStateOfType<PatientShellState>();
+      shellState?.switchToTab(3);
+    }
   }
 
   String _getDayAbbr(int weekday) {

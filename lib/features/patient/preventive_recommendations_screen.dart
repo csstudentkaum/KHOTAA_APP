@@ -6,7 +6,7 @@ import '../../models/smart_alert.dart' as alert_model;
 /// Preventive Recommendations Screen
 /// Displays alerts from smart insole with personalized recommendations
 class PreventiveRecommendationsScreen extends StatefulWidget {
-  const PreventiveRecommendationsScreen({Key? key}) : super(key: key);
+  const PreventiveRecommendationsScreen({super.key});
 
   @override
   State<PreventiveRecommendationsScreen> createState() =>
@@ -522,7 +522,7 @@ class _RecommendationCard extends StatelessWidget {
           border: Border.all(
             color: item.isCompleted
                 ? Colors.grey[300]!
-                : _getTypeColor(item.type).withOpacity(0.3),
+                : _getRecommendationTypeColor(item.type).withOpacity(0.3),
             width: 1,
           ),
         ),
@@ -551,7 +551,7 @@ class _RecommendationCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: _getTypeColor(
+                  color: _getRecommendationTypeColor(
                     item.type,
                   ).withOpacity(0.1 * pulseController.value),
                   blurRadius: 10 * pulseController.value,
@@ -574,12 +574,12 @@ class _RecommendationCard extends StatelessWidget {
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: _getTypeColor(item.type).withOpacity(0.1),
+        color: _getRecommendationTypeColor(item.type).withOpacity(0.1),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Icon(
         item.icon,
-        color: item.isCompleted ? Colors.grey[400] : _getTypeColor(item.type),
+        color: item.isCompleted ? Colors.grey[400] : _getRecommendationTypeColor(item.type),
         size: 28,
       ),
     );
@@ -593,7 +593,7 @@ class _RecommendationCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: _getTypeColor(item.type).withOpacity(0.1),
+            color: _getRecommendationTypeColor(item.type).withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -603,7 +603,7 @@ class _RecommendationCard extends StatelessWidget {
               fontWeight: FontWeight.bold,
               color: item.isCompleted
                   ? Colors.grey[500]
-                  : _getTypeColor(item.type),
+                  : _getRecommendationTypeColor(item.type),
               letterSpacing: 0.5,
             ),
           ),
@@ -669,17 +669,6 @@ class _RecommendationCard extends StatelessWidget {
     );
   }
 
-  Color _getTypeColor(RecommendationType type) {
-    switch (type) {
-      case RecommendationType.pressure:
-        return const Color(0xFF5C6BC0); // Indigo for pressure
-      case RecommendationType.temperature:
-        return const Color(
-          0xFFFF7043,
-        ); // Orange for temperature (matching weekly report)
-    }
-  }
-
   String _formatDateTime(DateTime dateTime) {
     final now = DateTime.now();
     final diff = now.difference(dateTime);
@@ -742,12 +731,12 @@ class _DetailBottomSheet extends StatelessWidget {
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: _getTypeColor(item.type).withOpacity(0.1),
+                        color: _getRecommendationTypeColor(item.type).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(
                         item.icon,
-                        color: _getTypeColor(item.type),
+                        color: _getRecommendationTypeColor(item.type),
                         size: 32,
                       ),
                     ),
@@ -831,7 +820,7 @@ class _DetailBottomSheet extends StatelessWidget {
   Widget _buildUrgencyBadge() {
     // Show type category instead of urgency
     String label = item.type.name.toUpperCase();
-    Color color = _getTypeColor(item.type);
+    Color color = _getRecommendationTypeColor(item.type);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -849,14 +838,15 @@ class _DetailBottomSheet extends StatelessWidget {
       ),
     );
   }
+}
 
-  Color _getTypeColor(RecommendationType type) {
-    switch (type) {
-      case RecommendationType.pressure:
-        return const Color(0xFF5C6BC0); // Indigo for pressure
-      case RecommendationType.temperature:
-        return const Color(0xFFFF7043); // Orange for temperature
-    }
+// Helper function - used by multiple widgets
+Color _getRecommendationTypeColor(RecommendationType type) {
+  switch (type) {
+    case RecommendationType.pressure:
+      return const Color(0xFF5C6BC0); // Indigo for pressure
+    case RecommendationType.temperature:
+      return const Color(0xFFFF7043); // Orange for temperature
   }
 }
 

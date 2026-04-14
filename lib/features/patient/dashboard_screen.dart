@@ -18,7 +18,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   final SensorDataService _sensorService = SensorDataService();
 
   // Connection status
-  bool _isConnected = true;
+  final bool _isConnected = true;
 
   // Animation controllers
   late AnimationController _pulseController;
@@ -273,11 +273,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, Colors.white.withOpacity(0.95)],
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -577,12 +573,10 @@ class _DashboardScreenState extends State<DashboardScreen>
               _buildSimpleFoot(
                 label: 'Left Foot',
                 pressureValues: _sensorService.leftFootPressure,
-                isLeft: true,
               ),
               _buildSimpleFoot(
                 label: 'Right Foot',
                 pressureValues: _sensorService.rightFootPressure,
-                isLeft: false,
               ),
             ],
           ),
@@ -597,7 +591,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildSimpleFoot({
     required String label,
     required List<double> pressureValues,
-    required bool isLeft,
   }) {
     // Calculate average pressure to determine status
     double avgPressure =
@@ -638,7 +631,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         ),
         const SizedBox(height: 12),
         // Simple foot shape
-        Container(
+        SizedBox(
           width: 90,
           height: 160,
           child: Stack(
@@ -824,11 +817,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, Colors.white],
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
