@@ -4,16 +4,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dashboard_screen.dart';
 import 'preventive_recommendations_screen.dart';
-import 'risk_explanation_screen.dart';
 import 'booking/my_bookings_screen.dart';
 import 'my_treatment_plans_screen.dart';
 import 'patient_shell.dart';
-import '../../services/alert_service.dart';
+import '../sensor_alerts/alert_service.dart';
 import '../../services/consultation_service.dart';
 import '../../services/notification_service.dart';
-import '../../services/push_notification_service.dart';
 import '../../models/consultation.dart';
-import '../../models/smart_alert.dart';
 import '../../app/app_theme.dart';
 import '../../shared/widgets/notification_bell_widget.dart';
 import '../shared/consultation_session_screen.dart';
@@ -43,7 +40,6 @@ class _PatientHomePageState extends State<PatientHomePage>
   final PageController _tipsController = PageController();
   late AnimationController _emergencyButtonController;
   late Animation<double> _pulseAnimation;
-  StreamSubscription? _notificationSubscription;
   Timer? _tipsAutoScroll;
 
   @override
@@ -63,10 +59,6 @@ class _PatientHomePageState extends State<PatientHomePage>
 
     // Initialize alert service and add sample data
     _initializeAlertService();
-
-    // Listen for notification taps
-    _notificationSubscription = PushNotificationService().onNotificationTap
-        .listen(_handleNotificationTap);
 
     // Auto-scroll tips every 4 seconds
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -109,15 +101,6 @@ class _PatientHomePageState extends State<PatientHomePage>
     }
   }
 
-  void _handleNotificationTap(SmartAlert alert) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RiskExplanationScreen(alert: alert),
-      ),
-    );
-  }
-
   void _startTipsAutoScroll() {
     _tipsAutoScroll?.cancel();
     _tipsAutoScroll = Timer.periodic(const Duration(seconds: 4), (_) {
@@ -138,7 +121,6 @@ class _PatientHomePageState extends State<PatientHomePage>
     _tipsController.dispose();
     _currentTipNotifier.dispose();
     _emergencyButtonController.dispose();
-    _notificationSubscription?.cancel();
     super.dispose();
   }
 

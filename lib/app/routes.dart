@@ -12,6 +12,10 @@ import '../features/patient/patient_shell.dart';
 class AppRoutes {
   AppRoutes._();
 
+  /// Global navigator key for navigation from outside widget tree
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   // Route names
   static const String splash = '/';
   static const String login = '/login';

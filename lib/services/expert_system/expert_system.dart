@@ -366,7 +366,7 @@ class ExpertSystemIntegration {
   ExpertSystemIntegration._internal();
 
   /// Process sensor data and return evaluation result
-  /// NOTE: Alert/notification handling is done by SensorNotificationService
+  /// NOTE: Alert/notification handling is done by SensorAlertHandler
   Future<ExpertSystemResult> processSensorData({
     required double leftFootTemperature,
     required double rightFootTemperature,

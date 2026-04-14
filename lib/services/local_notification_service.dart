@@ -17,6 +17,16 @@ class LocalNotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+
+  /// Notification types produced by the Expert System.
+  /// Matches the 3 risk scenarios in the expert system flowchart:
+  /// - MODERATE: single factor (temperature OR pressure)
+  /// - HIGH (background fallback): combined risk (both factors)
+  static const Set<String> riskAlertTypes = {
+    'abnormal_temperature', // MODERATE: |Left-Right| ≥ 2.2°C
+    'elevated_pressure',    // MODERATE: ≥200 kPa or ≥ Baseline×1.30
+    'combined_risk',        // HIGH (background): both rules triggered
+  };
   
   /// Stream for notification tap events
   final StreamController<String> _onTapController = StreamController<String>.broadcast();
@@ -83,11 +93,7 @@ class LocalNotificationService {
     }
 
     // Pick channel based on type
-    final isRiskAlert =
-        type == 'high_pressure' ||
-        type == 'elevated_pressure' ||
-        type == 'abnormal_temperature' ||
-        type == 'elevated_temperature';
+    final isRiskAlert = riskAlertTypes.contains(type);
 
     final androidDetails = AndroidNotificationDetails(
       isRiskAlert ? 'risk_alerts' : 'general',

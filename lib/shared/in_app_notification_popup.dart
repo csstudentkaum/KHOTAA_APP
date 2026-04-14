@@ -183,6 +183,7 @@ class _NotificationPopupState extends State<_NotificationPopup>
       case 'follow_up_completed':
         return Icons.verified_outlined;
       case 'high_pressure':
+      case 'combined_risk':
         return Icons.warning_amber_rounded;
       case 'elevated_pressure':
         return Icons.speed;
@@ -215,6 +216,7 @@ class _NotificationPopupState extends State<_NotificationPopup>
         return const Color(0xFF6366F1);
       case 'high_pressure':
       case 'abnormal_temperature':
+      case 'combined_risk':
         return const Color(0xFFEF4444);
       case 'elevated_pressure':
       case 'elevated_temperature':

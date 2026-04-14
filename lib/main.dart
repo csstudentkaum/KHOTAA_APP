@@ -9,7 +9,9 @@ import 'app/app_theme.dart';
 import 'app/routes.dart';
 import 'services/notification_service.dart';
 import 'services/local_notification_service.dart';
+import 'features/sensor_alerts/alert_service.dart';
 import 'services/bluetooth_service.dart';
+import 'features/patient/risk_explanation_screen.dart';
 
 /// Handle background messages
 @pragma('vm:entry-point')
@@ -65,16 +67,21 @@ void main() async {
     // Handle notification tap when app was in background
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint('🔔 Notification tapped (background): ${message.data}');
-      // Navigation will be handled by the app based on notification type
-      // The navigatorKey in routes can be used for navigation if needed
+      _navigateToLatestAlert(message.data['type'] as String?);
     });
 
     // Check if app was opened from a terminated state via notification
     final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       debugPrint('🔔 App opened from notification (terminated): ${initialMessage.data}');
-      // Handle initial navigation if needed
+      _navigateToLatestAlert(initialMessage.data['type'] as String?);
     }
+
+    // Handle local notification taps (risk alerts sent while app was in background)
+    LocalNotificationService().onNotificationTap.listen((payload) {
+      debugPrint('🔔 Local notification tapped: $payload');
+      _navigateToLatestAlert(payload);
+    });
 
     runApp(const KhotaaApp());
   } catch (e, stackTrace) {
@@ -82,6 +89,29 @@ void main() async {
     debugPrint('Stack trace: $stackTrace');
     runApp(ErrorApp(error: e.toString()));
   }
+}
+
+/// Navigate to the latest risk alert screen when a notification is tapped.
+/// Works for both local notifications and FCM background notifications.
+void _navigateToLatestAlert(String? type) {
+  if (!LocalNotificationService.riskAlertTypes.contains(type)) return;
+
+  // Wait briefly to ensure the navigator is ready (for terminated state)
+  Future.delayed(const Duration(milliseconds: 500), () {
+    final nav = AppRoutes.navigatorKey.currentState;
+    if (nav == null) return;
+
+    // Get the most recent health alert from AlertService
+    final alerts = AlertService().alerts;
+    if (alerts.isEmpty) return;
+
+    final latestAlert = alerts.first; // Already sorted newest-first
+    nav.push(
+      MaterialPageRoute(
+        builder: (_) => RiskExplanationScreen(alert: latestAlert),
+      ),
+    );
+  });
 }
 
 class ErrorApp extends StatelessWidget {
@@ -118,6 +148,7 @@ class KhotaaApp extends StatelessWidget {
       child: MaterialApp(
         title: 'KHOTAA',
         debugShowCheckedModeBanner: false,
+        navigatorKey: AppRoutes.navigatorKey,
         theme: AppTheme.lightTheme,
         initialRoute: AppRoutes.splash,
         routes: AppRoutes.routes,

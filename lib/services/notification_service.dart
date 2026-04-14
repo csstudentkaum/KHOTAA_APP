@@ -80,7 +80,8 @@ class NotificationService {
           type == 'high_pressure' ||
           type == 'elevated_pressure' ||
           type == 'abnormal_temperature' ||
-          type == 'elevated_temperature';
+          type == 'elevated_temperature' ||
+          type == 'combined_risk';
       LocalNotificationService().playSound(isAlert: isAlert);
     }
   }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
-import '../../services/alert_service.dart';
-import '../../models/smart_alert.dart' as alert_model;
+import '../sensor_alerts/alert_service.dart';
+import '../../models/alert.dart' as alert_model;
 
 /// Preventive Recommendations Screen
 /// Displays alerts from smart insole with personalized recommendations

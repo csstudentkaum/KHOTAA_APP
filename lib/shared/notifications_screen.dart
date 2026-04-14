@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../app/app_theme.dart';
-import '../models/smart_alert.dart';
-import '../services/alert_service.dart';
+import '../models/alert.dart';
+import '../features/sensor_alerts/alert_service.dart';
 import '../services/notification_service.dart';
 import '../features/patient/risk_explanation_screen.dart';
 

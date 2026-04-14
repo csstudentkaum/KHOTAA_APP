@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../models/smart_alert.dart';
-import '../../services/alert_service.dart';
+import '../../models/alert.dart';
+import '../sensor_alerts/alert_service.dart';
 import 'preventive_recommendations_screen.dart';
 
 /// Risk Explanation Screen

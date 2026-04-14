@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../services/alert_service.dart';
+import '../../features/sensor_alerts/alert_service.dart';
 import '../../services/notification_service.dart';
 import '../../shared/notifications_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';

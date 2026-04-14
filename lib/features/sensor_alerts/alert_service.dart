@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/smart_alert.dart';
+import '../../models/alert.dart';
 
-/// Service for managing smart alerts across the app
-/// Handles alert creation, storage, and notification triggers
+/// Service for managing smart alerts across the app.
+/// Handles alert creation, storage (local + Firestore), and notification triggers.
 class AlertService extends ChangeNotifier {
   static final AlertService _instance = AlertService._internal();
   factory AlertService() => _instance;
@@ -54,13 +54,12 @@ class AlertService extends ChangeNotifier {
 
   /// Clear old cache when version changes (to fix corrupted data)
   Future<void> _clearOldCacheIfNeeded() async {
-    const currentVersion = 5; // Increment to clear old IWGDF text from alerts
+    const currentVersion = 5;
     final prefs = await SharedPreferences.getInstance();
     final savedVersion =
         prefs.getInt('alerts_cache_version_$_currentPatientId') ?? 0;
 
     if (savedVersion < currentVersion) {
-      // Clear old cache completely
       await prefs.remove('smart_alerts_$_currentPatientId');
       await prefs.setInt(
         'alerts_cache_version_$_currentPatientId',
@@ -115,7 +114,6 @@ class AlertService extends ChangeNotifier {
           .snapshots()
           .listen(
             (snapshot) {
-              // Skip if using sample data only
               if (_useSampleDataOnly) return;
 
               for (var change in snapshot.docChanges) {
@@ -128,7 +126,6 @@ class AlertService extends ChangeNotifier {
               }
             },
             onError: (error) {
-              // Handle Firestore errors gracefully (e.g., missing index)
               debugPrint('Firestore listener error: $error');
             },
           );
@@ -167,7 +164,6 @@ class AlertService extends ChangeNotifier {
       sensorRegion: sensorRegion,
     );
 
-    // Save to Firestore
     try {
       await _firestore
           .collection('alerts')
@@ -177,9 +173,7 @@ class AlertService extends ChangeNotifier {
       debugPrint('Error saving alert to Firestore: $e');
     }
 
-    // Add locally
     _addAlert(alert);
-
     return alert;
   }
 
@@ -214,7 +208,6 @@ class AlertService extends ChangeNotifier {
       sensorData: sensorData,
     );
 
-    // Save to Firestore
     try {
       await _firestore
           .collection('alerts')
@@ -224,9 +217,7 @@ class AlertService extends ChangeNotifier {
       debugPrint('Error saving alert to Firestore: $e');
     }
 
-    // Add locally
     _addAlert(alert);
-
     return alert;
   }
 
@@ -243,7 +234,6 @@ class AlertService extends ChangeNotifier {
       );
       notifyListeners();
 
-      // Update Firestore
       try {
         await _firestore.collection('alerts').doc(alertId).update({
           'isViewed': true,
@@ -273,7 +263,6 @@ class AlertService extends ChangeNotifier {
       _saveLocalAlerts();
       notifyListeners();
 
-      // Update Firestore
       try {
         await _firestore.collection('alerts').doc(alertId).update({
           'isResolved': true,
@@ -314,7 +303,6 @@ class AlertService extends ChangeNotifier {
     _saveLocalAlerts();
     notifyListeners();
 
-    // Remove from Firestore
     try {
       await _firestore.collection('alerts').doc(alertId).delete();
     } catch (e) {
@@ -333,10 +321,8 @@ class AlertService extends ChangeNotifier {
   Future<void> addSampleAlerts() async {
     if (_currentPatientId == null) return;
 
-    // Enable sample data mode - ignore Firestore updates
     _useSampleDataOnly = true;
 
-    // Check if sample alerts were already added (don't reset if they exist)
     final hasExistingSamples = _alerts.any((a) => a.id.startsWith('sample_'));
     if (hasExistingSamples) {
       debugPrint(
@@ -345,9 +331,6 @@ class AlertService extends ChangeNotifier {
       return;
     }
 
-    // Define sample alerts with IWGDF 2023 recommendations
-    // 2 unread health alerts, 1 read health alert
-    // 2 read appointment alerts
     final samples = [
       SmartAlert(
         id: 'sample_health_pressure_001',
@@ -363,7 +346,6 @@ class AlertService extends ChangeNotifier {
         timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
         patientId: _currentPatientId!,
         notificationType: NotificationType.health,
-        // IWGDF 2023: Pressure Offloading Required
         recommendationTitle: 'Pressure Offloading Required',
         recommendationDescription:
             'Reduce weight-bearing immediately. Use offloading footwear or devices if available.',
@@ -388,7 +370,6 @@ class AlertService extends ChangeNotifier {
         patientId: _currentPatientId!,
         notificationType: NotificationType.health,
         isViewed: true,
-        // IWGDF 2023: Monitor Foot Temperature
         recommendationTitle: 'Monitor Foot Temperature',
         recommendationDescription:
             'Rest and monitor. Contact healthcare provider if asymmetry persists >48 hours.',
@@ -412,7 +393,6 @@ class AlertService extends ChangeNotifier {
         timestamp: DateTime.now().subtract(const Duration(hours: 3)),
         patientId: _currentPatientId!,
         notificationType: NotificationType.health,
-        // IWGDF 2023: Adjust Weight Distribution
         recommendationTitle: 'Adjust Weight Distribution',
         recommendationDescription:
             'Shift weight periodically. Check footwear fit and consider orthotic insoles.',

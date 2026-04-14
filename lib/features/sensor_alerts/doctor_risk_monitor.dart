@@ -1,38 +1,31 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'notification_service.dart';
+import '../../services/notification_service.dart';
 
-/// Service that monitors DFU readings for the doctor's patients
-/// and generates risk alert notifications for abnormal temperature/pressure.
-class DFURiskMonitorService {
+/// Monitors DFU readings for the doctor's patients and generates
+/// risk alert notifications for abnormal temperature/pressure.
+class DoctorRiskMonitor {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final NotificationService _notificationService = NotificationService();
 
   StreamSubscription<QuerySnapshot>? _subscription;
   bool _initialLoadDone = false;
 
-  // Thresholds (matching patient home screen)
+  // Thresholds
   static const double _pressureHighRisk = 80.0; // kPa — High risk
   static const double _pressureElevated = 60.0; // kPa — Above normal
   static const double _temperatureHigh = 35.0; // °C — High
   static const double _temperatureElevated = 33.0; // °C — Elevated
 
   /// Start monitoring DFU readings for all patients assigned to this doctor.
-  /// Listens for new readings and creates risk notifications.
   void startMonitoring(String doctorID) {
-    // Stop any existing subscription
     stopMonitoring();
     _initialLoadDone = false;
-
-    // Listen to dfu_readings for patients assigned to this doctor
-    // First, get patient IDs for this doctor, then listen to their readings
     _listenToPatientReadings(doctorID);
   }
 
   void _listenToPatientReadings(String doctorID) {
-    // Listen to all dfu_readings sorted by timestamp (newest first)
-    // We filter by doctorId on the patient's user document
     _subscription = _firestore
         .collection('dfu_readings')
         .orderBy('timestamp', descending: true)
@@ -45,7 +38,6 @@ class DFURiskMonitorService {
               return;
             }
 
-            // Process only newly added documents
             for (final change in snapshot.docChanges) {
               if (change.type == DocumentChangeType.added) {
                 final data = change.doc.data();
@@ -78,8 +70,6 @@ class DFURiskMonitorService {
     final pressure = (data['pressure'] ?? 0).toDouble();
     final temperature = (data['temperature'] ?? 0).toDouble();
 
-    // Check if this patient belongs to this doctor
-    // Either via assigned doctorId OR via active/followUp consultation
     final patientDoc = await _firestore
         .collection('users')
         .doc(patientId)
@@ -91,8 +81,6 @@ class DFURiskMonitorService {
 
     bool isMyPatient = assignedDoctor == doctorID;
 
-    // Also check if this patient has an active or follow-up consultation
-    // with this doctor
     if (!isMyPatient) {
       final consultationSnap = await _firestore
           .collection('consultations')
@@ -120,7 +108,6 @@ class DFURiskMonitorService {
         pressureValue: pressure,
         readingID: readingID,
       );
-      // Also notify the patient
       await _notificationService.notifyPatientRiskAlert(
         patientID: patientId,
         title: '⚠️ High Pressure Detected',
@@ -154,7 +141,6 @@ class DFURiskMonitorService {
         temperatureValue: temperature,
         readingID: readingID,
       );
-      // Also notify the patient
       await _notificationService.notifyPatientRiskAlert(
         patientID: patientId,
         title: '🌡️ High Temperature Detected',

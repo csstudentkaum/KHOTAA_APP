@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../services/expert_system/expert_system.dart';
-import 'sensor_notification_service.dart';
+import '../../sensor_alerts/sensor_alert_handler.dart';
 
 /// Shared sensor data service - Single source of truth for all sensor readings
 /// Used by both Dashboard (for UI) and Alert system (for notifications)
@@ -13,7 +13,7 @@ class SensorDataService extends ChangeNotifier {
   SensorDataService._internal();
 
   final ExpertSystemIntegration _expertSystem = ExpertSystemIntegration();
-  final SensorNotificationService _notificationService = SensorNotificationService();
+  final SensorAlertHandler _notificationService = SensorAlertHandler();
   
   Timer? _sensorTimer;
   bool _isMonitoring = false;

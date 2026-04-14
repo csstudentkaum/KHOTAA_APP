@@ -5,7 +5,7 @@ import 'dart:async';
 import '../../app/app_theme.dart';
 import '../../services/consultation_service.dart';
 import '../../services/notification_service.dart';
-import '../../services/dfu_risk_monitor_service.dart';
+import '../sensor_alerts/doctor_risk_monitor.dart';
 import '../../shared/in_app_notification_popup.dart';
 import 'doctor_notifications_screen.dart';
 import '../../models/consultation.dart';
@@ -32,7 +32,7 @@ class _DHomeScreenState extends State<DHomeScreen>
   String _lastName = '';
   int _selectedAppointmentTab = 0; // 0=Upcoming, 1=Follow-Up, 2=Completed
   late TabController _appointmentTabController;
-  final DFURiskMonitorService _riskMonitor = DFURiskMonitorService();
+  final DoctorRiskMonitor _riskMonitor = DoctorRiskMonitor();
   final Set<String> _autoCompletedFollowUps = {};
 
   @override
