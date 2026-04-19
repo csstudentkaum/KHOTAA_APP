@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../app/config.dart';
 import '../../models/medical_images.dart';
 import '../../models/image_analysis.dart';
@@ -18,7 +20,7 @@ class ImageAnalysisService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   /// Set to `false` once your real ML model endpoint is deployed.
-  static const bool useSimulatedAI = true;
+  static const bool useSimulatedAI = false;
 
   /// Set to `true` to save images & records to Vercel Blob + Firestore.
   static const bool persistData = true;
@@ -93,13 +95,37 @@ class ImageAnalysisService {
       confidence = sim.confidence;
       notes = sim.notes;
     } else {
-      // TODO: Real ML model call
-      // final response = await http.post(Uri.parse('YOUR_MODEL_ENDPOINT'), ...);
-      // final json = jsonDecode(response.body);
-      // classification = UlcerClass.values.byName(json['classification']);
-      // confidence = json['confidence'];
-      // notes = _noteFor(classification);
-      throw UnimplementedError('Real ML endpoint not configured yet');
+      final modelUrl = dotenv.env['MODEL_URL'] ?? '';
+      if (modelUrl.isEmpty) throw Exception('MODEL_URL not set in .env');
+
+      // Download image bytes from Vercel Blob URL
+      final imageResp = await http.get(Uri.parse(image.filePath));
+      if (imageResp.statusCode != 200) {
+        throw Exception('Failed to fetch image for inference');
+      }
+
+      // Send as multipart file upload
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$modelUrl/predict'),
+      );
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        imageResp.bodyBytes,
+        filename: 'image.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ));
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+
+      if (response.statusCode != 200) {
+        throw Exception('Model inference failed: ${response.body}');
+      }
+
+      final result = jsonDecode(response.body);
+      classification = UlcerClassX.fromString(result['prediction'] as String);
+      confidence = (result['confidence'] as num).toDouble();
+      notes = _noteFor(classification);
     }
 
     if (!persistData) {
@@ -109,7 +135,7 @@ class ImageAnalysisService {
         classification: classification,
         notes: notes,
         confidence: confidence,
-        modelName: 'DFU-Classify-v1',
+        modelName: 'efficientnetv2s',
         imageId: image.imageID,
         patientId: uid,
       );
@@ -122,7 +148,7 @@ class ImageAnalysisService {
       classification: classification,
       notes: notes,
       confidence: confidence,
-      modelName: 'DFU-Classify-v1',
+      modelName: 'efficientnetv2s',
       imageId: image.imageID,
       patientId: uid,
     );
