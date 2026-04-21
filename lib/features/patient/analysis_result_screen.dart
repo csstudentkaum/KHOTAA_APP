@@ -7,7 +7,7 @@ import 'package:printing/printing.dart';
 import '../../app/app_theme.dart';
 import '../../models/image_analysis.dart';
 import '../../models/medical_images.dart';
-import 'appointment_screen.dart';
+import 'booking/all_doctors_screen.dart';
 import 'medical_faq_chatbot_screen.dart';
 
 // ── Palette ─────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ class AnalysisResultScreen extends StatelessWidget {
       onTap: () {
         Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const AppointmentScreen()));
+        ).push(MaterialPageRoute(builder: (_) => const AllDoctorsScreen()));
       },
       child: Container(
         width: double.infinity,
