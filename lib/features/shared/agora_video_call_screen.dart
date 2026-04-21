@@ -467,30 +467,7 @@ class _RemoteVideoLayer extends StatelessWidget {
               connection: RtcConnection(channelId: channelId),
             ),
           ),
-          // Connected banner so user knows video is active
-          Positioned(
-            top: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF34C759).withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'Connected with $otherPersonName',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ),
-            ),
-          ),
+
         ],
       );
     }
