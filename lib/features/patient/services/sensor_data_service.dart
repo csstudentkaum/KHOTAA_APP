@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../services/expert_system/expert_system.dart';
+import '../../../services/firebase/insole_realtime_service.dart';
 import '../../sensor_alerts/sensor_alert_handler.dart';
 
 /// Shared sensor data service - Single source of truth for all sensor readings
@@ -14,8 +15,10 @@ class SensorDataService extends ChangeNotifier {
 
   final ExpertSystemIntegration _expertSystem = ExpertSystemIntegration();
   final SensorAlertHandler _notificationService = SensorAlertHandler();
-  
+  final InsoleRealtimeService _insoleService = InsoleRealtimeService();
+
   Timer? _sensorTimer;
+  StreamSubscription<InsoleSnapshot>? _insoleSubscription;
   bool _isMonitoring = false;
   BuildContext? _dialogContext;
 
@@ -25,11 +28,13 @@ class SensorDataService extends ChangeNotifier {
   int _stepsToday = 4523;
   Duration _wearingDuration = const Duration(hours: 3, minutes: 45);
 
-  // Foot sensor data
-  List<double> _leftFootPressure = [0.3, 0.5, 0.7, 0.4, 0.6];
-  List<double> _rightFootPressure = [0.4, 0.3, 0.5, 0.8, 0.4];
-  List<double> _leftFootTemp = [32.0, 32.5, 33.0, 32.2, 32.8];
-  List<double> _rightFootTemp = [32.3, 32.1, 32.8, 33.5, 32.5];
+  // Foot sensor data — 8 regions
+  // Left  = real ESP32 data via Firebase (updated by _onInsoleData)
+  // Right = simulated, kept in matching temperature range
+  List<double> _leftFootPressure = [0.185, 0.258, 0.252, 0.235, 0.242, 0.155, 0.110, 0.146];
+  List<double> _rightFootPressure = [0.18, 0.25, 0.24, 0.22, 0.23, 0.15, 0.11, 0.14];
+  List<double> _leftFootTemp = [26.6, 26.98, 26.98, 26.93, 26.62, 24.95, 27.12, 27.81];
+  List<double> _rightFootTemp = [26.5, 26.8, 27.0, 26.7, 26.9, 25.1, 27.0, 27.6];
 
   // Risk status
   bool _hasAbnormalReading = false;
@@ -66,75 +71,75 @@ class SensorDataService extends ChangeNotifier {
   void startMonitoring() {
     if (_isMonitoring) return;
     _isMonitoring = true;
-    
+
+    // Start Firebase insole listener — updates left foot with real ESP32 data
+    _insoleService.start();
+    _insoleSubscription = _insoleService.stream.listen(_onInsoleData);
+
+    // Timer drives right-foot simulation + expert system every 3 s
     _sensorTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       _updateSensorData();
     });
-    
-    debugPrint('📡 Sensor monitoring started');
+
+    debugPrint('📡 Sensor monitoring started (left=ESP32, right=simulated)');
   }
 
   /// Stop monitoring
   void stopMonitoring() {
     _sensorTimer?.cancel();
+    _insoleSubscription?.cancel();
+    _insoleService.stop();
     _isMonitoring = false;
     debugPrint('📡 Sensor monitoring stopped');
   }
 
-  /// Update sensor data and check for risks
-  /// TODO: Replace this simulation with real sensor data from your platform
+  /// Called every time the ESP32 pushes a new window to Firebase (~5 s).
+  /// Updates left foot arrays; expert system picks them up on the next timer tick.
+  void _onInsoleData(InsoleSnapshot snap) {
+    // Normalize kPa → 0–1 for heatmap display.
+    // _checkForAbnormalReadings multiplies back by 300 to get kPa.
+    _leftFootPressure =
+        snap.pressureKpa.map((kpa) => kpa / 300.0).toList();
+    _leftFootTemp = List<double>.from(snap.temperatureC);
+
+    // Update headline display values
+    _temperature = snap.temperatureC.reduce(max);
+    _pressure = snap.pressureKpa.reduce(max);
+
+    notifyListeners();
+  }
+
+  /// Timer callback — simulates right foot and runs expert system.
+  /// Left foot is updated separately by _onInsoleData() from Firebase.
   void _updateSensorData() async {
     final random = Random();
-    
-    // Simulate sensor values
-    _temperature = 34.0 + random.nextDouble() * 2.0;
-    _pressure = 200 + random.nextDouble() * 100;
     _stepsToday += random.nextInt(15);
 
-    // ────────────────────────────────────────────────────────────────────
-    // TESTING MODES - Change these to test different scenarios:
-    // ────────────────────────────────────────────────────────────────────
-    // Mode 1: NOTIFICATION (MODERATE) - High pressure ONLY
-    //         Pressure: ≥200 kPa, Temp difference: <2.2°C
-    //
-    // Mode 2: ALERT (HIGH) - Both high pressure AND temp asymmetry
-    //         Pressure: ≥200 kPa, Temp difference: ≥2.2°C
-    //
-    // Mode 3: NORMAL - No notifications
-    //         Pressure: <200 kPa, Temp difference: <2.2°C
-    // ────────────────────────────────────────────────────────────────────
-    
-    // Current mode: NOTIFICATION (high pressure only, no temp asymmetry)
-    for (int i = 0; i < 5; i++) {
-      // High pressure to trigger notification
-      _leftFootPressure[i] = (0.7 + random.nextDouble() * 0.3).clamp(0.0, 1.0);
-      _rightFootPressure[i] = (0.7 + random.nextDouble() * 0.3).clamp(0.0, 1.0);
-      
-      // Similar temperatures (difference < 2.2°C) - NO temp asymmetry
-      _leftFootTemp[i] = 33.0 + random.nextDouble() * 0.5;
-      _rightFootTemp[i] = 33.5 + random.nextDouble() * 0.5;
+    // Right foot — simulated in realistic diabetic range (25–28°C, normal pressure)
+    for (int i = 0; i < 8; i++) {
+      _rightFootPressure[i] = (0.1 + random.nextDouble() * 0.5).clamp(0.0, 1.0);
+      _rightFootTemp[i] = 25.0 + random.nextDouble() * 3.0;
     }
 
-    // Process through expert system
     await _checkForAbnormalReadings();
-    
     notifyListeners();
   }
 
   /// Check for abnormal readings using expert system
   Future<void> _checkForAbnormalReadings() async {
-    final leftMaxTemp = _leftFootTemp.reduce(max);
-    final rightMaxTemp = _rightFootTemp.reduce(max);
-    final maxPressureIndex = _leftFootPressure.indexOf(_leftFootPressure.reduce(max));
-    final maxPressure = [..._leftFootPressure, ..._rightFootPressure].reduce(max) * 300;
-    
-    // Determine which foot has higher pressure
-    final leftMaxPressure = _leftFootPressure.reduce(max);
+    // ── Pressure: find peak region across both feet ──────────────────
+    final leftMaxPressure  = _leftFootPressure.reduce(max);
     final rightMaxPressure = _rightFootPressure.reduce(max);
     final footSide = leftMaxPressure > rightMaxPressure ? 'left' : 'right';
-    
-    // Map pressure index to sensor region
-    final sensorRegion = _indexToRegion(maxPressureIndex);
+    final maxPressure = max(leftMaxPressure, rightMaxPressure) * 300; // → kPa
+    final maxPressureIndex = footSide == 'left'
+        ? _leftFootPressure.indexOf(leftMaxPressure)
+        : _rightFootPressure.indexOf(rightMaxPressure);
+    final pressureRegion = _indexToRegion(maxPressureIndex);
+
+    final leftMaxTemp  = _leftFootTemp.reduce(max);
+    final rightMaxTemp = _rightFootTemp.reduce(max);
+    final sensorRegion = pressureRegion;
 
     try {
       final result = await _expertSystem.processSensorData(
@@ -184,18 +189,15 @@ class SensorDataService extends ChangeNotifier {
   /// Map pressure array index to anatomical sensor region
   SensorRegion _indexToRegion(int index) {
     switch (index) {
-      case 0:
-        return SensorRegion.metatarsal1;
-      case 1:
-        return SensorRegion.metatarsal2;
-      case 2:
-        return SensorRegion.metatarsal3;
-      case 3:
-        return SensorRegion.metatarsal4;
-      case 4:
-        return SensorRegion.heel;
-      default:
-        return SensorRegion.metatarsal1;
+      case 0: return SensorRegion.metatarsal1;
+      case 1: return SensorRegion.metatarsal2;
+      case 2: return SensorRegion.metatarsal3;
+      case 3: return SensorRegion.metatarsal4;
+      case 4: return SensorRegion.metatarsal5;
+      case 5: return SensorRegion.hallux;
+      case 6: return SensorRegion.lateralMidfoot;
+      case 7: return SensorRegion.heel;
+      default: return SensorRegion.metatarsal1;
     }
   }
 
