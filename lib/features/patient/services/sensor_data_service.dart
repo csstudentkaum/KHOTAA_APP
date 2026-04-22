@@ -41,6 +41,15 @@ class SensorDataService extends ChangeNotifier {
   String _abnormalType = '';
   ExpertSystemResult? _lastResult;
 
+  // Rolling pressure windows — 40 samples × 3 s ≈ 2-min average to filter step spikes
+  static const int _pressureWindowSize = 40;
+  final List<List<double>> _leftPressureWindow  = [];
+  final List<List<double>> _rightPressureWindow = [];
+
+  // Temperature persistence — require 5 consecutive asymmetric readings before alerting
+  static const int _tempStreakRequired = 5;
+  int _tempAlertStreak = 0;
+
   // Getters
   double get temperature => _temperature;
   double get pressure => _pressure;
@@ -102,6 +111,16 @@ class SensorDataService extends ChangeNotifier {
         snap.pressureKpa.map((kpa) => kpa / 300.0).toList();
     _leftFootTemp = List<double>.from(snap.temperatureC);
 
+    debugPrint('✅ ESP32 data received at ${snap.receivedAt.toIso8601String()}');
+    debugPrint('   Pressure kPa: ${snap.pressureKpa.map((v) => v.toStringAsFixed(1)).toList()}');
+    debugPrint('   Temp °C:      ${snap.temperatureC.map((v) => v.toStringAsFixed(1)).toList()}');
+
+    // Clear stale default values so the rolling average reflects real data immediately.
+    if (_leftPressureWindow.isEmpty ||
+        _leftPressureWindow.last != _leftFootPressure) {
+      _leftPressureWindow.clear();
+    }
+
     // Update headline display values
     _temperature = snap.temperatureC.reduce(max);
     _pressure = snap.pressureKpa.reduce(max);
@@ -118,7 +137,7 @@ class SensorDataService extends ChangeNotifier {
     // Right foot — simulated in realistic diabetic range (25–28°C, normal pressure)
     for (int i = 0; i < 8; i++) {
       _rightFootPressure[i] = (0.1 + random.nextDouble() * 0.5).clamp(0.0, 1.0);
-      _rightFootTemp[i] = 25.0 + random.nextDouble() * 3.0;
+      _rightFootTemp[i] = 25.5 + random.nextDouble() * 1.0; // narrow range → stable baseline for asymmetry check
     }
 
     await _checkForAbnormalReadings();
@@ -127,28 +146,71 @@ class SensorDataService extends ChangeNotifier {
 
   /// Check for abnormal readings using expert system
   Future<void> _checkForAbnormalReadings() async {
-    // ── Pressure: find peak region across both feet ──────────────────
-    final leftMaxPressure  = _leftFootPressure.reduce(max);
-    final rightMaxPressure = _rightFootPressure.reduce(max);
+    // ── Rolling pressure window — snapshot current readings ───────────────────
+    _leftPressureWindow.add(List<double>.from(_leftFootPressure));
+    if (_leftPressureWindow.length > _pressureWindowSize) _leftPressureWindow.removeAt(0);
+    _rightPressureWindow.add(List<double>.from(_rightFootPressure));
+    if (_rightPressureWindow.length > _pressureWindowSize) _rightPressureWindow.removeAt(0);
+
+    // ── Pressure: 2-min rolling average per region (filters single-step spikes) ─
+    final avgLeft  = List<double>.filled(8, 0.0);
+    final avgRight = List<double>.filled(8, 0.0);
+    for (final s in _leftPressureWindow) {
+      for (int i = 0; i < 8; i++) avgLeft[i]  += s[i];
+    }
+    for (final s in _rightPressureWindow) {
+      for (int i = 0; i < 8; i++) avgRight[i] += s[i];
+    }
+    for (int i = 0; i < 8; i++) {
+      avgLeft[i]  /= _leftPressureWindow.length;
+      avgRight[i] /= _rightPressureWindow.length;
+    }
+    final leftMaxPressure  = avgLeft.reduce(max);
+    final rightMaxPressure = avgRight.reduce(max);
     final footSide = leftMaxPressure > rightMaxPressure ? 'left' : 'right';
     final maxPressure = max(leftMaxPressure, rightMaxPressure) * 300; // → kPa
     final maxPressureIndex = footSide == 'left'
-        ? _leftFootPressure.indexOf(leftMaxPressure)
-        : _rightFootPressure.indexOf(rightMaxPressure);
+        ? avgLeft.indexOf(leftMaxPressure)
+        : avgRight.indexOf(rightMaxPressure);
     final pressureRegion = _indexToRegion(maxPressureIndex);
 
-    final leftMaxTemp  = _leftFootTemp.reduce(max);
-    final rightMaxTemp = _rightFootTemp.reduce(max);
-    final sensorRegion = pressureRegion;
+    // ── Temperature: per-region comparison (IWGDF 2023 / Armstrong 2007) ──────
+    final int regionCount = min(_leftFootTemp.length, _rightFootTemp.length);
+    double worstTempDiff  = 0.0;
+    int    worstTempIndex = 0;
+    for (int i = 0; i < regionCount; i++) {
+      final diff = (_leftFootTemp[i] - _rightFootTemp[i]).abs();
+      if (diff > worstTempDiff) {
+        worstTempDiff  = diff;
+        worstTempIndex = i;
+      }
+    }
+
+    // Persistence check — only alert after 5 consecutive asymmetric readings (~15 s)
+    if (worstTempDiff >= KnowledgeBase.temperatureDifferenceThreshold) {
+      _tempAlertStreak++;
+    } else {
+      _tempAlertStreak = 0;
+    }
+    final bool tempPersistent = _tempAlertStreak >= _tempStreakRequired;
+
+    final double leftRegionTemp  = _leftFootTemp[worstTempIndex];
+    final double rightRegionTemp = _rightFootTemp[worstTempIndex];
+    final SensorRegion tempRegion = _indexToRegion(worstTempIndex);
+    // footSide for temperature = whichever foot is hotter at the worst region
+    final String tempFootSide = leftRegionTemp >= rightRegionTemp ? 'left' : 'right';
+    final dominantRegion = tempPersistent ? tempRegion : pressureRegion;
+    final String dominantFootSide = tempPersistent ? tempFootSide : footSide;
 
     try {
       final result = await _expertSystem.processSensorData(
-        leftFootTemperature: leftMaxTemp,
-        rightFootTemperature: rightMaxTemp,
+        // Pass equal temps when asymmetry hasn't persisted — single spike won't alert
+        leftFootTemperature: tempPersistent ? leftRegionTemp : rightRegionTemp,
+        rightFootTemperature: rightRegionTemp,
         plantarPressure: maxPressure,
         pressureBaseline: 150.0,
-        sensorRegion: sensorRegion,
-        footSide: footSide,
+        sensorRegion: dominantRegion,
+        footSide: dominantFootSide,
       );
 
       _lastResult = result;
