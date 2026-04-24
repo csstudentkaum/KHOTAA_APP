@@ -1,11 +1,7 @@
 // KHOTAA Expert System - Rule-Based Diabetic Foot Ulcer Risk Detection
-//
 // Based on IWGDF 2023 Guidelines:
 // - Prevention Guideline: Temperature monitoring (≥2.2°C asymmetry)
 // - Offloading Guideline: Pressure thresholds (≥200 kPa)
-// - References: Armstrong et al. (2007), Bus et al. (2016)
-//
-// Designed to prevent alert fatigue - only notifies for clinically significant risk.
 
 import 'package:flutter/material.dart';
 
@@ -164,71 +160,87 @@ class ExpertSystemResult {
 // KNOWLEDGE BASE - Clinical Thresholds (IWGDF)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class KnowledgeBase {
-  /// Temperature difference threshold: ≥2.2°C indicates inflammation risk
-  /// Reference: Armstrong et al. (2007) - Skin Temperature Monitoring
-  static const double temperatureDifferenceThreshold = 2.2;
-  
-  /// Absolute pressure threshold: ≥200 kPa indicates tissue stress
-  /// Reference: Bus et al. (2016) - IWGDF guidance on footwear and offloading
-  static const double absolutePressureThreshold = 200.0;
-  
-  /// Baseline percentage: 30% above personal baseline is abnormal
-  /// Reference: Clinical practice guidelines for personalized monitoring
-  static const double pressureBaselinePercentage = 0.30;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXPERT SYSTEM ENGINE
-// ═══════════════════════════════════════════════════════════════════════════════
-
 class KhotaaExpertSystem {
-  
-  /// Evaluate temperature asymmetry between feet
-  TriggeredRule? evaluateTemperatureRisk(double leftTemp, double rightTemp) {
-    final tempDiff = (leftTemp - rightTemp).abs();
-    if (tempDiff >= KnowledgeBase.temperatureDifferenceThreshold) {
-      return TriggeredRule(
-        type: RuleType.temperatureAsymmetry,
-        description: 'Temperature difference of ${tempDiff.toStringAsFixed(1)}°C detected',
-        measuredValue: tempDiff,
-        threshold: KnowledgeBase.temperatureDifferenceThreshold,
-      );
-    }
-    return null;
-  }
 
-  /// Evaluate pressure against absolute and baseline thresholds (IWGDF)
-  List<TriggeredRule> evaluatePressureRisk(
-    double pressure, double baseline, SensorRegion region) {
-    final List<TriggeredRule> rules = [];
-
-    // Rule 1: Absolute threshold (200 kPa - IWGDF standard)
-    if (pressure >= KnowledgeBase.absolutePressureThreshold) {
-      rules.add(TriggeredRule(
-        type: RuleType.elevatedPressure,
-        description: 'Pressure ${pressure.toStringAsFixed(0)} kPa exceeds ${KnowledgeBase.absolutePressureThreshold.toStringAsFixed(0)} kPa threshold in ${region.displayName}',
-        measuredValue: pressure,
-        threshold: KnowledgeBase.absolutePressureThreshold,
-        region: region,
-      ));
+    /// Evaluate temperature asymmetry between feet
+    TriggeredRule? evaluateTemperatureRisk(double leftTemp, double rightTemp) {
+      const threshold = 2.2;
+      final tempDiff = (leftTemp - rightTemp).abs();
+      if (tempDiff >= threshold) {
+        return TriggeredRule(
+          type: RuleType.temperatureAsymmetry,
+          description: 'Temperature difference of ${tempDiff.toStringAsFixed(1)}°C detected',
+          measuredValue: tempDiff,
+          threshold: threshold,
+        );
+      }
+      return null;
     }
 
-    if (baseline > 0) {
-      final baselineThreshold = baseline * (1 + KnowledgeBase.pressureBaselinePercentage);
-      if (pressure >= baselineThreshold) {
-        final pct = ((pressure - baseline) / baseline * 100);
+    /// Evaluate pressure against absolute and baseline thresholds
+    List<TriggeredRule> evaluatePressureRisk(
+      double pressure, double baseline, SensorRegion region) {
+      final List<TriggeredRule> rules = [];
+      const absoluteThreshold = 200.0;
+      const baselinePct = 0.30;
+      // Rule 1: Absolute threshold
+      if (pressure >= absoluteThreshold) {
         rules.add(TriggeredRule(
-          type: RuleType.pressureAboveBaseline,
-          description: 'Pressure ${pct.toStringAsFixed(0)}% above baseline in ${region.displayName}',
+          type: RuleType.elevatedPressure,
+          description: 'Pressure ${pressure.toStringAsFixed(0)} kPa exceeds ${absoluteThreshold.toStringAsFixed(0)} kPa threshold in ${region.displayName}',
           measuredValue: pressure,
-          threshold: baselineThreshold,
+          threshold: absoluteThreshold,
           region: region,
         ));
       }
+      if (baseline > 0) {
+        final baselineThreshold = baseline * (1 + baselinePct);
+        if (pressure >= baselineThreshold) {
+          final pct = ((pressure - baseline) / baseline * 100);
+          rules.add(TriggeredRule(
+            type: RuleType.pressureAboveBaseline,
+            description: 'Pressure ${pct.toStringAsFixed(0)}% above baseline in ${region.displayName}',
+            measuredValue: pressure,
+            threshold: baselineThreshold,
+            region: region,
+          ));
+        }
+      }
+      return rules;
     }
-    return rules;
+  /// HIGH RISK recommendation based on IWGDF 2023 Prevention Guideline
+  /// Combined temperature and pressure abnormality indicates pre-ulcerative state
+  RecommendedAction _getHighRiskRecommendation(SensorRegion region) {
+    return RecommendedAction(
+      title: 'Offload Immediately',
+      description: 'Stop weight-bearing on the affected foot',
+      instructions: 'Sit or lie down. Elevate your foot above heart level for 15-20 minutes.',
+      isUrgent: true,
+    );
   }
+
+  /// TEMPERATURE recommendation based on IWGDF 2023
+  /// Temperature asymmetry ≥2.2°C may indicate inflammation or early infection
+  RecommendedAction _getTemperatureRecommendation(SensorRegion region) {
+    return RecommendedAction(
+      title: 'Monitor Temperature',
+      description: 'Temperature difference detected between feet',
+      instructions: 'Rest your feet and recheck in 1-2 hours. If asymmetry persists, reduce activity.',
+      isUrgent: false,
+    );
+  }
+
+  /// PRESSURE recommendation based on IWGDF 2023 Offloading Guideline
+  /// Peak plantar pressure ≥200 kPa increases ulceration risk
+  RecommendedAction _getPressureRecommendation(SensorRegion region) {
+    return RecommendedAction(
+      title: 'Reduce Weight-Bearing',
+      description: 'Lower plantar pressure to prevent tissue damage',
+      instructions: 'Take a seated break. Avoid prolonged standing or walking.',
+      isUrgent: false,
+    );
+  }
+
 
   /// Main evaluation - combines all rules
   ExpertSystemResult evaluateSensorData(SensorInput input) {
@@ -262,7 +274,7 @@ class KhotaaExpertSystem {
       return ExpertSystemResult(
         riskLevel: RiskLevel.high,
         triggeredRules: allRules,
-        recommendedActions: _getHighRiskRecommendations(input.sensorRegion),
+        recommendedActions: [_getHighRiskRecommendation(input.sensorRegion)],
         userMessage: 'High risk detected in $footLabel $regionName. Immediate action required.',
         shouldTriggerNotification: false,
         shouldTriggerAlert: true,
@@ -276,9 +288,11 @@ class KhotaaExpertSystem {
     return ExpertSystemResult(
       riskLevel: RiskLevel.moderate,
       triggeredRules: allRules,
-      recommendedActions: tempRule != null
-          ? _getTemperatureRecommendations(input.sensorRegion)
-          : _getPressureRecommendations(input.sensorRegion),
+      recommendedActions: [
+        tempRule != null
+            ? _getTemperatureRecommendation(input.sensorRegion)
+            : _getPressureRecommendation(input.sensorRegion)
+      ],
       userMessage: tempRule != null
           ? 'Temperature asymmetry detected in $footLabel foot. Monitor closely.'
           : 'Elevated pressure in $footLabel $regionName. Reduce activity.',
@@ -290,68 +304,6 @@ class KhotaaExpertSystem {
     );
   }
 
-  /// HIGH RISK recommendations based on IWGDF 2023 Prevention Guideline
-  /// Combined temperature and pressure abnormality indicates pre-ulcerative state
-  List<RecommendedAction> _getHighRiskRecommendations(SensorRegion region) {
-    return [
-      RecommendedAction(
-        title: 'Offload Immediately',
-        description: 'Stop weight-bearing on the affected foot',
-        instructions: 'Sit or lie down. Elevate your foot above heart level for 15-20 minutes.',
-        isUrgent: true,
-      ),
-      RecommendedAction(
-        title: 'Inspect Your Foot',
-        description: 'Check for signs of tissue damage',
-        instructions: 'Look for redness, swelling, warmth, blisters, or open wounds in ${region.displayName}.',
-        isUrgent: true,
-      ),
-      RecommendedAction(
-        title: 'Contact Healthcare Provider',
-        description: 'Seek professional evaluation within 24 hours',
-        instructions: 'Combined abnormalities indicate elevated ulcer risk. Do not delay medical consultation.',
-        isUrgent: true,
-      ),
-    ];
-  }
-
-  /// TEMPERATURE recommendations based on IWGDF 2023
-  /// Temperature asymmetry ≥2.2°C may indicate inflammation or early infection
-  List<RecommendedAction> _getTemperatureRecommendations(SensorRegion region) {
-    return [
-      RecommendedAction(
-        title: 'Monitor Temperature',
-        description: 'Temperature difference detected between feet',
-        instructions: 'Rest your feet and recheck in 1-2 hours. If asymmetry persists, reduce activity.',
-        isUrgent: false,
-      ),
-      RecommendedAction(
-        title: 'Inspect the Warmer Foot',
-        description: 'Check for early signs of inflammation',
-        instructions: 'Look for redness or swelling in ${region.displayName}. Avoid tight footwear.',
-        isUrgent: false,
-      ),
-    ];
-  }
-
-  /// PRESSURE recommendations based on IWGDF 2023 Offloading Guideline
-  /// Peak plantar pressure ≥200 kPa increases ulceration risk
-  List<RecommendedAction> _getPressureRecommendations(SensorRegion region) {
-    return [
-      RecommendedAction(
-        title: 'Reduce Weight-Bearing',
-        description: 'Lower plantar pressure to prevent tissue damage',
-        instructions: 'Take a seated break. Avoid prolonged standing or walking.',
-        isUrgent: false,
-      ),
-      RecommendedAction(
-        title: 'Check Your Footwear',
-        description: 'Ensure proper cushioning and fit',
-        instructions: 'Use therapeutic footwear with pressure redistribution. Avoid flat or hard-soled shoes.',
-        isUrgent: false,
-      ),
-    ];
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
