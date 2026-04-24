@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 /// Holds one averaged window from the ESP32 insole.
 /// pressureKpa  — 8 values in kPa (already converted by Wokwi toKpa())
 /// temperatureC — 8 values in °C
-/// Regions order matches ESP32 REGIONS[] array (Niemann 2016):
+/// Regions order matches ESP32 REGIONS[] array:
 ///   0=MTK1  1=MTK2  2=MTK3  3=MTK4  4=MTK5  5=D1  6=L  7=C
 class InsoleSnapshot {
   final List<double> pressureKpa;

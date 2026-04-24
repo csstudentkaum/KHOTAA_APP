@@ -9,6 +9,20 @@ import '../../sensor_alerts/sensor_alert_handler.dart';
 /// Used by both Dashboard (for UI) and Alert system (for notifications)
 /// TODO: Replace simulation with real sensor data from your platform
 class SensorDataService extends ChangeNotifier {
+  // Integration-test flag:
+  //  true  → right foot is pinned to a healthy-skin baseline (31°C, 0 pressure)
+  //          so any alert is driven ONLY by real Wokwi / insole input.
+  //  false → right foot is randomly simulated (legacy demo behaviour).
+  // Flip to false once a bilateral insole is available.
+  //
+  // Baseline chosen to match the left-foot NTC baseline in Wokwi diagram
+  // (~30–31.8 °C per region). Normal dorsal foot skin = 29–33 °C.
+  // Asymmetry (>=2.2 °C, IWGDF 2023) will fire only when a left NTC is
+  // intentionally raised above ~33 °C in Wokwi.
+  static const bool kSimulateRightFootConstant = true;
+  static const double kRightFootIdleTempC = 31.0;
+  static const double kRightFootIdlePressureNorm = 0.0;
+
   static final SensorDataService _instance = SensorDataService._internal();
   factory SensorDataService() => _instance;
   SensorDataService._internal();
@@ -50,6 +64,28 @@ class SensorDataService extends ChangeNotifier {
   static const int _tempStreakRequired = 5;
   int _tempAlertStreak = 0;
 
+  // ── Insole liveness tracking ─────────────────────────────────────────────
+  // ESP32 pushes every ~5 s, but Wi-Fi + HTTPS handshakes can delay a window.
+  // 45 s gives ~9× the normal cadence before we call it offline, which avoids
+  // false "Offline" flashes while the insole is actually still running.
+  static const Duration kInsoleStaleAfter = Duration(seconds: 45);
+  DateTime? _lastInsoleUpdate;
+  Timer? _livenessTimer;
+
+  /// `true` if a real ESP32 snapshot arrived within [kInsoleStaleAfter].
+  bool get isLeftFootLive {
+    final t = _lastInsoleUpdate;
+    if (t == null) return false;
+    return DateTime.now().difference(t) < kInsoleStaleAfter;
+  }
+
+  /// Seconds since the last real insole push (null if never received).
+  int? get secondsSinceLastInsoleUpdate {
+    final t = _lastInsoleUpdate;
+    if (t == null) return null;
+    return DateTime.now().difference(t).inSeconds;
+  }
+
   // Getters
   double get temperature => _temperature;
   double get pressure => _pressure;
@@ -90,12 +126,19 @@ class SensorDataService extends ChangeNotifier {
       _updateSensorData();
     });
 
+    // Liveness ticker — refreshes UI every 5 s so 'offline' state appears
+    // automatically when ESP32 stops sending (even without new data).
+    _livenessTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      notifyListeners();
+    });
+
     debugPrint('📡 Sensor monitoring started (left=ESP32, right=simulated)');
   }
 
   /// Stop monitoring
   void stopMonitoring() {
     _sensorTimer?.cancel();
+    _livenessTimer?.cancel();
     _insoleSubscription?.cancel();
     _insoleService.stop();
     _isMonitoring = false;
@@ -105,6 +148,7 @@ class SensorDataService extends ChangeNotifier {
   /// Called every time the ESP32 pushes a new window to Firebase (~5 s).
   /// Updates left foot arrays; expert system picks them up on the next timer tick.
   void _onInsoleData(InsoleSnapshot snap) {
+    _lastInsoleUpdate = DateTime.now();
     // Normalize kPa → 0–1 for heatmap display.
     // _checkForAbnormalReadings multiplies back by 300 to get kPa.
     _leftFootPressure =
@@ -134,10 +178,36 @@ class SensorDataService extends ChangeNotifier {
     final random = Random();
     _stepsToday += random.nextInt(15);
 
-    // Right foot — simulated in realistic diabetic range (25–28°C, normal pressure)
-    for (int i = 0; i < 8; i++) {
-      _rightFootPressure[i] = (0.1 + random.nextDouble() * 0.5).clamp(0.0, 1.0);
-      _rightFootTemp[i] = 25.5 + random.nextDouble() * 1.0; // narrow range → stable baseline for asymmetry check
+    // Right foot — either pinned constant (integration test) or randomly simulated.
+    if (kSimulateRightFootConstant) {
+      for (int i = 0; i < 8; i++) {
+        _rightFootPressure[i] = kRightFootIdlePressureNorm;
+        _rightFootTemp[i] = kRightFootIdleTempC;
+      }
+    } else {
+      for (int i = 0; i < 8; i++) {
+        _rightFootPressure[i] = (0.1 + random.nextDouble() * 0.5).clamp(0.0, 1.0);
+        _rightFootTemp[i] = 25.5 + random.nextDouble() * 1.0;
+      }
+    }
+
+    // Gate the expert system on insole liveness.
+    // When the ESP32 is offline, stale left-foot readings would otherwise keep
+    // firing HIGH_PRESSURE / TEMP_ASYMMETRY alerts for up to 2 minutes (the
+    // rolling-window length). Clearing state here ensures alerts stop within
+    // one tick of disconnection and cannot resurrect on reconnect with stale
+    // history.
+    if (!isLeftFootLive) {
+      _leftPressureWindow.clear();
+      _rightPressureWindow.clear();
+      _tempAlertStreak = 0;
+      if (_hasAbnormalReading || _lastResult != null) {
+        _hasAbnormalReading = false;
+        _abnormalType = '';
+        _lastResult = null;
+      }
+      notifyListeners();
+      return;
     }
 
     await _checkForAbnormalReadings();

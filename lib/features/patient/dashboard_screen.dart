@@ -17,8 +17,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Shared sensor data service
   final SensorDataService _sensorService = SensorDataService();
 
-  // Connection status
-  final bool _isConnected = true;
+  // Connection status — driven by real ESP32 liveness (15 s stale window)
+  bool get _isConnected => _sensorService.isLeftFootLive;
 
   // Animation controllers
   late AnimationController _pulseController;
@@ -135,12 +135,40 @@ class _DashboardScreenState extends State<DashboardScreen>
         .catchError((_) {});
   }
 
-  // Get status color based on abnormal readings
-  Color _getStatusColor() {
-    return _sensorService.hasAbnormalReading
-        ? const Color(0xFFF57C00)
-        : const Color(0xFF4CAF50);
+  // Severity level derived from the expert system's abnormalType:
+  //   ''              → Normal      (green)
+  //   'pressure'      → Moderate    (yellow) — single-factor risk
+  //   'temperature'   → Moderate    (yellow) — single-factor risk
+  //   'both'          → Needs Attention (red) — combined high risk
+  // Offline state is handled separately by the caller.
+  ({Color color, String label, IconData icon}) _severityVisuals() {
+    if (!_sensorService.hasAbnormalReading) {
+      return (
+        color: const Color(0xFF4CAF50),
+        label: 'Normal',
+        icon: Icons.check_circle_outline,
+      );
+    }
+    switch (_sensorService.abnormalType) {
+      case 'both':
+        return (
+          color: const Color(0xFFE53935),
+          label: 'Needs Attention',
+          icon: Icons.warning_amber_rounded,
+        );
+      case 'pressure':
+      case 'temperature':
+      default:
+        return (
+          color: const Color(0xFFF57C00),
+          label: 'Moderate',
+          icon: Icons.info_outline,
+        );
+    }
   }
+
+  // Legacy helper kept for the alert banner.
+  Color _getStatusColor() => _severityVisuals().color;
 
   // Get abnormal message for alert banner
   String _getAbnormalMessage() {
@@ -443,18 +471,27 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Simple status indicator - calm and patient-friendly
   Widget _buildStatusIndicator() {
+    // When the insole is offline, never show a stale Normal/Moderate/High
+    // verdict — medical-device practice is to display a neutral waiting state.
+    final bool live = _sensorService.isLeftFootLive;
+    final vis = _severityVisuals();
+    final Color statusColor = live ? vis.color : Colors.grey;
+    final String statusLabel = !live ? 'Waiting for Data' : vis.label;
+    final IconData statusIcon =
+        !live ? Icons.hourglass_empty : vis.icon;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            _getStatusColor().withOpacity(0.1),
-            _getStatusColor().withOpacity(0.05),
+            statusColor.withOpacity(0.1),
+            statusColor.withOpacity(0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _getStatusColor().withOpacity(0.3),
+          color: statusColor.withOpacity(0.3),
           width: 1.5,
         ),
       ),
@@ -463,14 +500,12 @@ class _DashboardScreenState extends State<DashboardScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _getStatusColor().withOpacity(0.15),
+              color: statusColor.withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              _sensorService.hasAbnormalReading
-                  ? Icons.info_outline
-                  : Icons.check_circle_outline,
-              color: _getStatusColor(),
+              statusIcon,
+              color: statusColor,
               size: 28,
             ),
           ),
@@ -489,11 +524,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _sensorService.hasAbnormalReading ? 'Needs Attention' : 'Normal',
+                  statusLabel,
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _getStatusColor(),
+                    color: statusColor,
                   ),
                 ),
               ],
@@ -566,17 +601,23 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
           const SizedBox(height: 24),
-          // Foot diagrams
+          // Foot diagrams — both feet gray out together when insole is offline,
+          // so the dashboard never shows the right foot "working alone" (its
+          // values are only meaningful as a comparison baseline).
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _buildSimpleFoot(
                 label: 'Left Foot',
                 pressureValues: _sensorService.leftFootPressure,
+                isOffline: !_sensorService.isLeftFootLive,
+                reflectExpertSystem: true,
               ),
               _buildSimpleFoot(
                 label: 'Right Foot',
                 pressureValues: _sensorService.rightFootPressure,
+                isOffline: !_sensorService.isLeftFootLive,
+                reflectExpertSystem: false,
               ),
             ],
           ),
@@ -591,31 +632,66 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildSimpleFoot({
     required String label,
     required List<double> pressureValues,
+    bool isOffline = false,
+    bool reflectExpertSystem = false,
   }) {
-    // Calculate average pressure to determine status
+    // Only the foot wearing the real sensor (left) reflects the expert
+    // system's verdict. The right foot uses its own pressure heuristic so it
+    // stays a neutral baseline and doesn't mirror the left foot's alert color.
     double avgPressure =
         pressureValues.reduce((a, b) => a + b) / pressureValues.length;
 
-    // Determine status and colors
     String status;
     Color mainColor;
     Color heelColor;
     IconData statusIcon;
 
-    if (avgPressure > 0.7) {
+    if (isOffline) {
+      status = 'Offline';
+      mainColor = const Color(0xFFE0E0E0);
+      heelColor = const Color(0xFF9E9E9E);
+      statusIcon = Icons.cloud_off_outlined;
+    } else if (reflectExpertSystem && _sensorService.hasAbnormalReading) {
+      // Expert system has fired — reflect its severity.
+      switch (_sensorService.abnormalType) {
+        case 'both':
+          status = 'High Risk';
+          mainColor = const Color(0xFFFFCDD2);
+          heelColor = const Color(0xFFE53935);
+          statusIcon = Icons.error_outline;
+          break;
+        case 'pressure':
+          status = 'High Pressure';
+          mainColor = const Color(0xFFFFE0B2);
+          heelColor = const Color(0xFFF57C00);
+          statusIcon = Icons.compress;
+          break;
+        case 'temperature':
+          status = 'Temp Asymmetry';
+          mainColor = const Color(0xFFFFE0B2);
+          heelColor = const Color(0xFFF57C00);
+          statusIcon = Icons.thermostat;
+          break;
+        default:
+          status = 'Moderate';
+          mainColor = const Color(0xFFFFF9C4);
+          heelColor = const Color(0xFFFFA726);
+          statusIcon = Icons.info_outline;
+      }
+    } else if (avgPressure > 0.7) {
       status = 'High Pressure';
-      mainColor = const Color(0xFFFFCDD2); // Light red
-      heelColor = const Color(0xFFE53935); // Red
+      mainColor = const Color(0xFFFFCDD2);
+      heelColor = const Color(0xFFE53935);
       statusIcon = Icons.error_outline;
     } else if (avgPressure > 0.4) {
       status = 'Moderate';
-      mainColor = const Color(0xFFFFF9C4); // Light yellow
-      heelColor = const Color(0xFFFFA726); // Orange
+      mainColor = const Color(0xFFFFF9C4);
+      heelColor = const Color(0xFFFFA726);
       statusIcon = Icons.show_chart;
     } else {
       status = 'Normal';
-      mainColor = const Color(0xFFC8E6C9); // Light green
-      heelColor = const Color(0xFF4CAF50); // Green
+      mainColor = const Color(0xFFC8E6C9);
+      heelColor = const Color(0xFF4CAF50);
       statusIcon = Icons.check_circle_outline;
     }
 
@@ -623,42 +699,45 @@ class _DashboardScreenState extends State<DashboardScreen>
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1A1A2E),
+            color: isOffline ? Colors.grey[500] : const Color(0xFF1A1A2E),
           ),
         ),
         const SizedBox(height: 12),
         // Simple foot shape
-        SizedBox(
-          width: 90,
-          height: 160,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Main foot body (pill shape)
-              Container(
-                width: 70,
-                height: 140,
-                decoration: BoxDecoration(
-                  color: mainColor,
-                  borderRadius: BorderRadius.circular(35),
-                ),
-              ),
-              // Heel circle at bottom
-              Positioned(
-                bottom: 10,
-                child: Container(
-                  width: 40,
-                  height: 40,
+        Opacity(
+          opacity: isOffline ? 0.55 : 1.0,
+          child: SizedBox(
+            width: 90,
+            height: 160,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Main foot body (pill shape)
+                Container(
+                  width: 70,
+                  height: 140,
                   decoration: BoxDecoration(
-                    color: heelColor,
-                    shape: BoxShape.circle,
+                    color: mainColor,
+                    borderRadius: BorderRadius.circular(35),
                   ),
                 ),
-              ),
-            ],
+                // Heel circle at bottom
+                Positioned(
+                  bottom: 10,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: heelColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 12),

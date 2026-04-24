@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 // ENUMS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// 8 anatomical sensor regions from Niemann et al. dataset
+/// 8 anatomical sensor regions monitored by the insole.
 enum SensorRegion {
   metatarsal1, // MTK1 - First metatarsal head
   metatarsal2, // MTK2 - Second metatarsal head
