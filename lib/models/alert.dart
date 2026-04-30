@@ -109,6 +109,14 @@ extension RiskCategoryExtension on RiskCategory {
 
 /// Smart Alert model with enhanced risk information
 class SmartAlert {
+  /// Returns a full formatted date and time string (e.g., 30/04/2026 14:30)
+  String get fullFormattedDateTime {
+    return "[0m${timestamp.day.toString().padLeft(2, '0')}/"
+        "${timestamp.month.toString().padLeft(2, '0')}/"
+        "${timestamp.year} "
+        "${timestamp.hour.toString().padLeft(2, '0')}:"
+        "${timestamp.minute.toString().padLeft(2, '0')}";
+  }
 
   /// Create SmartAlert from Firestore document
   static SmartAlert fromFirestore(dynamic doc) {
