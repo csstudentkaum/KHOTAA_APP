@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../../app/app_theme.dart';
 import '../../models/image_analysis.dart';
 import '../../models/medical_images.dart';
@@ -949,7 +950,7 @@ class AnalysisResultScreen extends StatelessWidget {
                   ),
                   pw.SizedBox(height: 6),
                   pw.Text(
-                    'Risk Level: ${analysis.riskLevel}  •  Confidence: ${analysis.confidencePercent}',
+                    'Risk Level: ${analysis.riskLevel}   |   Confidence: ${analysis.confidencePercent}',
                     style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
                   ),
                 ],
@@ -964,7 +965,9 @@ class AnalysisResultScreen extends StatelessWidget {
             ),
             pw.SizedBox(height: 6),
             pw.Text(
-              analysis.patientSummary,
+              analysis.patientSummary
+                  .replaceAll('\u2014', '-')
+                  .replaceAll('\u2013', '-'),
               style: const pw.TextStyle(fontSize: 11, lineSpacing: 4),
             ),
             pw.SizedBox(height: 16),
@@ -976,7 +979,10 @@ class AnalysisResultScreen extends StatelessWidget {
             ),
             pw.SizedBox(height: 6),
             pw.Text(
-              analysis.recommendation,
+              analysis.recommendation
+                  .replaceAll('• ', '- ')
+                  .replaceAll('\u2014', '-')
+                  .replaceAll('\u2013', '-'),
               style: const pw.TextStyle(fontSize: 11, lineSpacing: 4),
             ),
             pw.SizedBox(height: 16),
@@ -1009,14 +1015,65 @@ class AnalysisResultScreen extends StatelessWidget {
 
       final bytes = await pdf.save();
 
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename:
-            'KHOTAA_Report_${analysis.classificationLabel}_${image.uploadedAt.millisecondsSinceEpoch}.pdf',
+      // Save the PDF to the device so the user has it locally.
+      // Try the public Downloads folder on Android first, fall back to the
+      // app's documents directory on iOS / when Downloads is unavailable.
+      final filename =
+          'KHOTAA_Report_${analysis.classificationLabel}_${image.uploadedAt.millisecondsSinceEpoch}.pdf';
+
+      Directory? targetDir;
+      if (Platform.isAndroid) {
+        targetDir = Directory('/storage/emulated/0/Download');
+        if (!await targetDir.exists()) {
+          targetDir = await getExternalStorageDirectory();
+        }
+      }
+      targetDir ??= await getApplicationDocumentsDirectory();
+
+      final filePath = '${targetDir.path}/$filename';
+      final file = File(filePath);
+      await file.writeAsBytes(bytes, flush: true);
+
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white, size: 22),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Report saved to your Downloads folder',
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () => OpenFile.open(file.path),
+          ),
+        ),
       );
     } catch (e) {
+      messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not generate report: $e')),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white, size: 22),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Could not save the report. Please try again.',
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 4),
+        ),
       );
     }
   }
