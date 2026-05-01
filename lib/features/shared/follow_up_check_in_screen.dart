@@ -2,11 +2,9 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../../app/app_theme.dart';
-import '../../app/config.dart';
 import '../../models/consultation.dart';
 import '../../services/firebase/consultation_chat_service.dart';
 
@@ -85,8 +83,6 @@ class _FollowUpCheckInScreenState extends State<FollowUpCheckInScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    final idToken = await user.getIdToken();
-    final bytes = await file.readAsBytes();
     final ext = file.path.split('.').last.toLowerCase();
     final mimeMap = {
       'jpg': 'image/jpeg',
@@ -95,26 +91,24 @@ class _FollowUpCheckInScreenState extends State<FollowUpCheckInScreen> {
       'webp': 'image/webp',
     };
 
-    final uri = Uri.parse(
-      '${AppConfig.serverUrl}/api/upload-chat-file'
-      '?consultationId=${widget.consultation.consultationID}&folder=checkin',
-    );
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('consultations')
+        .child(widget.consultation.consultationID)
+        .child('checkin')
+        .child(fileName);
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': mimeMap[ext] ?? 'image/jpeg',
-        'Authorization': 'Bearer $idToken',
+    final metadata = SettableMetadata(
+      contentType: mimeMap[ext] ?? 'image/jpeg',
+      customMetadata: {
+        'consultationId': widget.consultation.consultationID,
+        'senderId': user.uid,
       },
-      body: bytes,
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Upload failed (${response.statusCode})');
-    }
-
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json['url'] as String;
+    final task = await ref.putFile(file, metadata);
+    return task.ref.getDownloadURL();
   }
 
   Future<void> _submit() async {

@@ -2,10 +2,35 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // ── Medical images uploaded by patients for AI analysis ──
+    // Path: medical_images/{patientId}/{fileName}
+    // - Patient (owner) can upload and read their own images.
+    // - The patient's assigned doctor can read them.
+    match /medical_images/{patientId}/{fileName} {
+      allow read: if request.auth != null && (
+        request.auth.uid == patientId ||
+        firestore.get(/databases/(default)/documents/users/$(patientId)).data.doctorId == request.auth.uid
+      );
+      allow write: if request.auth != null
+        && request.auth.uid == patientId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Consultation chat files (images, voice, documents, check-in photos) ──
+    // Path: consultations/{consultationId}/{folder}/{fileName}
+    // - Only the consultation's patient or doctor can read/write.
+    match /consultations/{consultationId}/{folder}/{fileName} {
+      allow read, write: if request.auth != null && (
+        firestore.get(/databases/(default)/documents/consultations/$(consultationId)).data.patientID == request.auth.uid ||
+        firestore.get(/databases/(default)/documents/consultations/$(consultationId)).data.doctorID == request.auth.uid
+      );
+    }
+
+    // ── Default deny everything else ──
     match /{allPaths=**} {
-      // Allow authenticated users to read and write storage.
-      // TODO: Add proper security rules before production.
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

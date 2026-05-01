@@ -5,28 +5,26 @@ import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import '../../app/config.dart';
 import '../../models/medical_images.dart';
 import '../../models/image_analysis.dart';
 
 /// Handles the full image-analysis pipeline:
-///   1. Upload photo → Vercel Blob (via server API)
+///   1. Upload photo → Firebase Storage
 ///   2. Save MedicalImages doc → Firestore
 ///   3. Run classification (simulated until ML endpoint is ready)
 ///   4. Save ImageAnalysis doc → Firestore
 class ImageAnalysisService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   /// Set to `false` once your real ML model endpoint is deployed.
   static const bool useSimulatedAI = false;
 
-  /// Set to `true` to save images & records to Vercel Blob + Firestore.
+  /// Set to `true` to save images & records to Firebase Storage + Firestore.
   static const bool persistData = true;
-
-  /// Your Vercel server base URL — read from AppConfig (never hardcoded).
-  String get _serverUrl => AppConfig.serverUrl;
 
   String? get _uid => _auth.currentUser?.uid;
 
@@ -47,32 +45,44 @@ class ImageAnalysisService {
       );
     }
 
-    // Upload image to Vercel Blob via server API
-    final imageBytes = await file.readAsBytes();
-    final response = await http.post(
-      Uri.parse('$_serverUrl/api/upload-image?patientId=$uid'),
-      headers: {'Content-Type': 'image/jpeg'},
-      body: imageBytes,
+    // Upload image to Firebase Storage at: medical_images/{uid}/{timestamp}.jpg
+    final ext = file.path.split('.').last.toLowerCase();
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final ref = _storage.ref().child('medical_images').child(uid).child(fileName);
+
+    final metadata = SettableMetadata(
+      contentType: _mimeType(ext),
+      customMetadata: {'patientId': uid},
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Image upload failed: ${response.body}');
-    }
-
-    final json = jsonDecode(response.body);
-    final imageUrl = json['url'] as String;
+    final task = await ref.putFile(file, metadata);
+    final imageUrl = await task.ref.getDownloadURL();
 
     // Save record to Firestore medical_images collection
     final id = _db.collection('medical_images').doc().id;
     final record = MedicalImages(
       imageID: id,
       uploadedAt: DateTime.now(),
-      filePath: imageUrl, // Vercel Blob URL
+      filePath: imageUrl, // Firebase Storage download URL
       patientId: uid,
     );
 
     await _db.collection('medical_images').doc(id).set(record.toFirestore());
     return record;
+  }
+
+  String _mimeType(String ext) {
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
   }
 
   // ── 2. Analyse the image ──────────────────────────────────────────
@@ -98,7 +108,7 @@ class ImageAnalysisService {
       final modelUrl = dotenv.env['MODEL_URL'] ?? '';
       if (modelUrl.isEmpty) throw Exception('MODEL_URL not set in .env');
 
-      // Download image bytes from Vercel Blob URL
+      // Download image bytes from Firebase Storage URL
       final imageResp = await http.get(Uri.parse(image.filePath));
       if (imageResp.statusCode != 200) {
         throw Exception('Failed to fetch image for inference');

@@ -1,9 +1,7 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-import '../../app/config.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../../models/chat_message.dart';
 import '../../models/consultation.dart';
 import '../../models/treatment_plan.dart';
@@ -11,6 +9,7 @@ import '../../models/treatment_plan.dart';
 class ConsultationChatService {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
+  final _storage = FirebaseStorage.instance;
 
   // ── Collections ──
 
@@ -334,44 +333,39 @@ class ConsultationChatService {
     await ref.set({...msg.toMap(), 'messageID': ref.id});
   }
 
-  /// Uploads a file to Vercel Blob and returns the public URL.
-  /// The URL is stored in Firestore and security is enforced by Firestore rules
-  /// (only the consultation's doctor/patient can read messages containing URLs).
+  /// Uploads a file to Firebase Storage and returns the download URL.
+  /// Path: consultations/{consultationId}/{folder}/{timestamp}.{ext}
+  /// Access is controlled by Firebase Storage rules.
   Future<String> _uploadFile(
       String consultationId, File file, String folder) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    final idToken = await user.getIdToken();
-    final bytes = await file.readAsBytes();
-
     final ext = file.path.split('.').last.toLowerCase();
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
     final mimeType = _mimeType(ext);
 
-    final uri = Uri.parse(
-      '${AppConfig.serverUrl}/api/upload-chat-file'
-      '?consultationId=$consultationId&folder=$folder',
-    );
+    final ref = _storage
+        .ref()
+        .child('consultations')
+        .child(consultationId)
+        .child(folder)
+        .child(fileName);
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': mimeType,
-        'Authorization': 'Bearer $idToken',
+    final metadata = SettableMetadata(
+      contentType: mimeType,
+      customMetadata: {
+        'consultationId': consultationId,
+        'senderId': user.uid,
       },
-      body: bytes,
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Upload failed (${response.statusCode}): ${response.body}');
-    }
-
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json['url'] as String;
+    final task = await ref.putFile(file, metadata);
+    return task.ref.getDownloadURL();
   }
 
   /// Returns the URL to play/display a chat file.
-  /// Private Vercel Blob URLs already contain an embedded access token,
+  /// Firebase Storage download URLs already contain an embedded access token,
   /// so they are directly usable by Image.network() and audio players.
   Future<String> getFileUrl(String url) async => url;
 
