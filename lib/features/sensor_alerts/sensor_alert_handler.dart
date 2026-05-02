@@ -180,9 +180,19 @@ class SensorAlertHandler {
       final affectedFoot = result.affectedFoot;
       final regionName = result.affectedRegion?.displayName ?? 'Foot';
 
+      // Extract the ACTUAL measured values from the triggered rules so that
+      // the Sensor Readings card in the Alert Details screen shows the real
+      // value that fired the alert (e.g. 385 kPa) instead of the rolling average.
+      // Note: tempRule.measuredValue holds the ASYMMETRY DIFFERENCE, not the
+      // actual skin temperature — so temperature always comes from sensorService.
+      final pressureRule = result.triggeredRules.where(
+        (r) => r.type == RuleType.elevatedPressure || r.type == RuleType.pressureAboveBaseline,
+      ).firstOrNull;
+
+      // Fall back to the sensor-service averages only when no rule carries a value.
       final sensorService = SensorDataService();
-      final pressure = sensorService.pressure;
-      final temperature = sensorService.temperature;
+      final double pressureValue = pressureRule?.measuredValue ?? sensorService.pressure;
+      final double temperatureValue = sensorService.temperature;
 
       await _alertService.createCustomAlert(
         title: title,
@@ -196,8 +206,8 @@ class SensorAlertHandler {
         sensorData: {
           'footSide': affectedFoot == 'left' ? 'Left Foot' : 'Right Foot',
           'sensorRegion': regionName,
-          'pressureValue': pressure,
-          'temperatureValue': temperature,
+          'pressureValue': pressureValue,
+          'temperatureValue': temperatureValue,
         },
       );
 
@@ -364,6 +374,7 @@ class _MedicalAlertDialogState extends State<_MedicalAlertDialog> {
 
   Widget _buildCompactAlert() {
     final region = widget.result.affectedRegion?.displayName ?? 'Foot';
+    final foot = widget.result.affectedFoot == 'left' ? 'Left' : 'Right';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
@@ -394,7 +405,7 @@ class _MedicalAlertDialogState extends State<_MedicalAlertDialog> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Abnormal readings detected in $region.\nPlease take action.',
+            'Abnormal readings detected in\n$foot Foot — $region.\nPlease take action.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,

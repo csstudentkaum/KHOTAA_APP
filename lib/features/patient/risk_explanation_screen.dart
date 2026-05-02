@@ -407,7 +407,7 @@ class _RiskExplanationScreenState extends State<RiskExplanationScreen>
                 child: _buildSensorValue(
                   'Pressure',
                   '${data['pressureValue']?.toStringAsFixed(1) ?? 'N/A'}',
-                  'units',
+                  'kPa',
                   Icons.compress,
                   const Color(0xFFE53935),
                 ),

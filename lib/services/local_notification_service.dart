@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -100,20 +101,27 @@ class LocalNotificationService {
     // Android caches channel settings after first creation, so any
     // importance change requires a new channel ID.
     final androidDetails = AndroidNotificationDetails(
-      isRiskAlert ? 'khotaa_risk_alerts_v2' : 'khotaa_general_v2',
+      // v3: force channel recreation with fullScreenIntent + vibration-only sound
+      isRiskAlert ? 'khotaa_risk_alerts_v3' : 'khotaa_general_v3',
       isRiskAlert ? 'Khotaa Risk Alerts' : 'Khotaa General',
       channelDescription: isRiskAlert
           ? 'High-priority alerts for abnormal foot temperature and pressure readings'
           : 'Booking updates and general notifications',
       importance: isRiskAlert ? Importance.max : Importance.defaultImportance,
       priority: isRiskAlert ? Priority.max : Priority.defaultPriority,
+      // fullScreenIntent: guarantees the banner/peek notification appears on Android
+      // regardless of sound settings. Required for medical alert apps.
+      fullScreenIntent: isRiskAlert,
       playSound: false, // sound played separately via AudioPlayer to avoid double sound
       enableVibration: true,
+      vibrationPattern: isRiskAlert ? Int64List.fromList([0, 500, 200, 500]) : null,
       enableLights: true,
       ledColor: const Color(0xFFE53935),
+      ledOnMs: 1000,
+      ledOffMs: 500,
       icon: '@mipmap/ic_launcher',
       ticker: isRiskAlert ? 'Health alert from Khotaa' : null,
-      styleInformation: BigTextStyleInformation(''),
+      styleInformation: BigTextStyleInformation(body),
     );
 
     final darwinDetails = DarwinNotificationDetails(

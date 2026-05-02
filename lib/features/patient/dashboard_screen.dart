@@ -763,7 +763,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _buildLegendDot(const Color(0xFF4CAF50), 'Low'),
+        _buildLegendDot(const Color(0xFF4CAF50), 'Normal'),
         const SizedBox(width: 20),
         _buildLegendDot(const Color(0xFFFFA726), 'Medium'),
         const SizedBox(width: 20),
