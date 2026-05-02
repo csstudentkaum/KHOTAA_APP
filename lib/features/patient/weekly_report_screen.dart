@@ -16,7 +16,7 @@ class WeeklyReportScreen extends StatefulWidget {
 }
 
 class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
-  final List<String> _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final List<String> _weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Computed from real AlertService data
   List<double> _temperatureData = List.filled(7, 0.0);
@@ -36,12 +36,21 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     super.initState();
     _computeWeekBounds();
     _loadReportData();
+    // Re-render whenever AlertService syncs new data from Firestore
+    AlertService().addListener(_loadReportData);
+  }
+
+  @override
+  void dispose() {
+    AlertService().removeListener(_loadReportData);
+    super.dispose();
   }
 
   void _computeWeekBounds() {
     final now = DateTime.now();
     // Monday of current week
-    _weekStart = DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    // Sunday = weekday 7 in Dart, so offset = weekday % 7
+    _weekStart = DateTime(now.year, now.month, now.day - (now.weekday % 7));
     _weekEnd = _weekStart.add(const Duration(days: 6));
   }
 
@@ -66,8 +75,8 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     int combinedAlerts = 0;
 
     for (final alert in weekAlerts) {
-      // weekday: 1=Mon ... 7=Sun → index 0..6
-      final dayIndex = alert.timestamp.weekday - 1;
+      // weekday in Dart: 1=Mon...7=Sun. We want Sun=0, Mon=1...Sat=6
+      final dayIndex = alert.timestamp.weekday % 7;
 
       switch (alert.category) {
         case RiskCategory.temperature:
@@ -1118,172 +1127,208 @@ class _SimpleChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final width = size.width;
     final height = size.height;
-    final chartHeight = height - 40; // Leave space for labels
-    final chartWidth = width - 50; // Leave space for Y-axis labels
+    const double topPad    = 30;   // space for value labels above dots
+    const double bottomPad = 40;   // space for X-axis labels
+    const double leftPad   = 50;   // space for Y-axis labels
+    final double chartH    = height - topPad - bottomPad;
+    final double chartW    = width  - leftPad;
+    final double range     = (maxValue - minValue).clamp(0.001, double.infinity);
 
-    final paint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    // ── coordinate helpers ──────────────────────────────────────────
+    double toY(double v) =>
+        topPad + chartH - ((v - minValue) / range) * chartH;
+    double toX(int i)    =>
+        leftPad + i * (chartW / (data.length - 1));
 
-    // Draw grid lines
-    _drawGridLines(canvas, size, chartWidth, chartHeight);
-
-    // Draw Y-axis labels
-    _drawYAxisLabels(canvas, size, chartHeight);
-
-    // Draw X-axis labels
-    _drawXAxisLabels(canvas, size, chartWidth, chartHeight);
-
-    // Draw the line chart
-    final path = Path();
-    final points = <Offset>[];
-
-    for (int i = 0; i < data.length; i++) {
-      final x = 50 + (i * (chartWidth / (data.length - 1)));
-      final normalizedValue = (data[i] - minValue) / (maxValue - minValue);
-      final y = chartHeight - (normalizedValue * (chartHeight - 20));
-      points.add(Offset(x, y));
+    // ── trend color per segment ──────────────────────────────────────
+    // Rising  → red   (higher pressure / temperature = worse)
+    // Falling → green (getting better)
+    // Stable  → lineColor
+    Color trendColor(double from, double to) {
+      final pct = (to - from) / from;
+      if (pct > 0.03)  return const Color(0xFFE53935); // ↑ worse
+      if (pct < -0.03) return const Color(0xFF43A047); // ↓ better
+      return lineColor;                                 // → stable
     }
 
-    // Draw smooth curve
-    path.moveTo(points[0].dx, points[0].dy);
-    for (int i = 0; i < points.length - 1; i++) {
-      final p0 = i > 0 ? points[i - 1] : points[0];
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      final p3 = i < points.length - 2
-          ? points[i + 2]
-          : points[points.length - 1];
-
-      final cp1x = p1.dx + (p2.dx - p0.dx) / 6;
-      final cp1y = p1.dy + (p2.dy - p0.dy) / 6;
-      final cp2x = p2.dx - (p3.dx - p1.dx) / 6;
-      final cp2y = p2.dy - (p3.dy - p1.dy) / 6;
-
-      path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.dx, p2.dy);
-    }
-
-    canvas.drawPath(path, paint);
-
-    // Draw area under the curve
-    final areaPath = Path.from(path);
-    areaPath.lineTo(points.last.dx, chartHeight);
-    areaPath.lineTo(points.first.dx, chartHeight);
-    areaPath.close();
-
-    final areaPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [lineColor.withOpacity(0.3), lineColor.withOpacity(0.0)],
-      ).createShader(Rect.fromLTWH(0, 0, width, chartHeight));
-    canvas.drawPath(areaPath, areaPaint);
-
-    // Draw data points
-    for (int i = 0; i < points.length; i++) {
-      // Outer circle
-      canvas.drawCircle(
-        points[i],
-        8,
-        Paint()..color = lineColor.withOpacity(0.2),
-      );
-      // Inner circle
-      canvas.drawCircle(points[i], 5, Paint()..color = Colors.white);
-      // Core circle
-      canvas.drawCircle(points[i], 4, Paint()..color = lineColor);
-
-      // Draw value label
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: data[i].toStringAsFixed(1),
-          style: TextStyle(
-            color: lineColor,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(points[i].dx - textPainter.width / 2, points[i].dy - 22),
-      );
-    }
-  }
-
-  void _drawGridLines(
-    Canvas canvas,
-    Size size,
-    double chartWidth,
-    double chartHeight,
-  ) {
+    // ── 1. Grid lines ────────────────────────────────────────────────
     final gridPaint = Paint()
       ..color = Colors.grey.withOpacity(0.15)
       ..strokeWidth = 1;
-
-    // Horizontal grid lines
     for (int i = 0; i <= 4; i++) {
-      final y = (chartHeight / 4) * i;
-      canvas.drawLine(Offset(50, y), Offset(size.width, y), gridPaint);
+      final y = topPad + (chartH / 4) * i;
+      canvas.drawLine(Offset(leftPad, y), Offset(width, y), gridPaint);
     }
-  }
 
-  void _drawYAxisLabels(Canvas canvas, Size size, double chartHeight) {
-    final range = maxValue - minValue;
-    final step = range / 4;
-
+    // ── 2. Y-axis labels ─────────────────────────────────────────────
+    final yStep = range / 4;
     for (int i = 0; i <= 4; i++) {
-      final value = maxValue - (step * i);
-      final y = (chartHeight / 4) * i;
-
-      final textPainter = TextPainter(
+      final value = maxValue - yStep * i;
+      final y     = topPad + (chartH / 4) * i;
+      final tp = TextPainter(
         text: TextSpan(
           text: value.toStringAsFixed(0),
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
+          style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.w500),
         ),
         textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(45 - textPainter.width, y - textPainter.height / 2),
-      );
+      )..layout();
+      tp.paint(canvas, Offset(leftPad - tp.width - 4, y - tp.height / 2));
     }
-  }
 
-  void _drawXAxisLabels(
-    Canvas canvas,
-    Size size,
-    double chartWidth,
-    double chartHeight,
-  ) {
+    // ── 3. X-axis labels + empty-day markers ────────────────────────
     for (int i = 0; i < labels.length; i++) {
-      final x = 50 + (i * (chartWidth / (labels.length - 1)));
-
-      final textPainter = TextPainter(
+      final hasData = data[i] > 0;
+      final tp = TextPainter(
         text: TextSpan(
           text: labels[i],
           style: TextStyle(
-            color: Colors.grey[600],
+            color: hasData ? Colors.grey[700] : Colors.grey[400],
             fontSize: 12,
-            fontWeight: FontWeight.w600,
+            fontWeight: hasData ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
         textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(toX(i) - tp.width / 2, topPad + chartH + 10));
+
+      if (!hasData) {
+        // hollow circle at mid-chart height for empty days
+        final emptyY = topPad + chartH * 0.5;
+        canvas.drawCircle(
+          Offset(toX(i), emptyY), 4,
+          Paint()
+            ..color = Colors.grey[300]!
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+        final dash = TextPainter(
+          text: TextSpan(
+            text: 'No data',
+            style: TextStyle(color: Colors.grey[400], fontSize: 9),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        dash.paint(canvas, Offset(toX(i) - dash.width / 2, emptyY - 16));
+      }
+    }
+
+    // ── 4. Collect non-zero points (preserving x position = day slot) ─
+    final nonZeroEntries = <MapEntry<int, double>>[];
+    for (int i = 0; i < data.length; i++) {
+      if (data[i] > 0) nonZeroEntries.add(MapEntry(i, data[i]));
+    }
+
+    if (nonZeroEntries.isEmpty) return;
+
+    final pts = nonZeroEntries
+        .map((e) => Offset(toX(e.key), toY(e.value)))
+        .toList();
+
+    // ── 5. Colored trend segments ────────────────────────────────────
+    for (int i = 0; i < pts.length - 1; i++) {
+      final fromVal = nonZeroEntries[i].value;
+      final toVal   = nonZeroEntries[i + 1].value;
+      final segColor = trendColor(fromVal, toVal);
+
+      // Smooth bezier between consecutive non-zero points
+      final p1 = pts[i];
+      final p2 = pts[i + 1];
+      final cpX = (p1.dx + p2.dx) / 2;
+      final segPath = Path()
+        ..moveTo(p1.dx, p1.dy)
+        ..cubicTo(cpX, p1.dy, cpX, p2.dy, p2.dx, p2.dy);
+
+      canvas.drawPath(
+        segPath,
+        Paint()
+          ..color = segColor
+          ..strokeWidth = 3
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round,
       );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(x - textPainter.width / 2, chartHeight + 12),
+
+      // Subtle area fill under segment
+      final areaPath = Path()
+        ..moveTo(p1.dx, p1.dy)
+        ..cubicTo(cpX, p1.dy, cpX, p2.dy, p2.dx, p2.dy)
+        ..lineTo(p2.dx, topPad + chartH)
+        ..lineTo(p1.dx, topPad + chartH)
+        ..close();
+      canvas.drawPath(
+        areaPath,
+        Paint()
+          ..color = segColor.withOpacity(0.10),
       );
+
+      // Mid-segment trend arrow label
+      final midX = (p1.dx + p2.dx) / 2;
+      final midY = (p1.dy + p2.dy) / 2 - 14;
+      final arrow = toVal > fromVal * 1.03 ? '↑'
+                  : toVal < fromVal * 0.97 ? '↓'
+                  : '→';
+      final arrowTp = TextPainter(
+        text: TextSpan(
+          text: arrow,
+          style: TextStyle(color: segColor, fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      arrowTp.paint(canvas, Offset(midX - arrowTp.width / 2, midY.clamp(topPad, topPad + chartH - 14)));
+    }
+
+    // ── 6. Dots + value labels on each non-zero point ────────────────
+    for (int i = 0; i < pts.length; i++) {
+      final pt  = pts[i];
+      final val = nonZeroEntries[i].value;
+
+      // Dot
+      canvas.drawCircle(pt, 9,  Paint()..color = lineColor.withOpacity(0.18));
+      canvas.drawCircle(pt, 5,  Paint()..color = Colors.white);
+      canvas.drawCircle(pt, 4,  Paint()..color = lineColor);
+
+      // Value label above dot — always inside bounds
+      final valTp = TextPainter(
+        text: TextSpan(
+          text: val.toStringAsFixed(1),
+          style: TextStyle(color: lineColor, fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final labelY = (pt.dy - 22).clamp(2.0, topPad + chartH - valTp.height - 2);
+      valTp.paint(canvas, Offset(pt.dx - valTp.width / 2, labelY));
+    }
+
+    // ── 7. Overall trend badge (top-right corner) ────────────────────
+    if (nonZeroEntries.length >= 2) {
+      final first = nonZeroEntries.first.value;
+      final last  = nonZeroEntries.last.value;
+      final pct   = (last - first) / first;
+      final badgeText = pct >  0.03 ? '↑ Rising'
+                      : pct < -0.03 ? '↓ Improving'
+                      : '→ Stable';
+      final badgeColor = pct >  0.03 ? const Color(0xFFE53935)
+                       : pct < -0.03 ? const Color(0xFF43A047)
+                       : Colors.grey[600]!;
+
+      final badgeTp = TextPainter(
+        text: TextSpan(
+          text: badgeText,
+          style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.w700),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final badgeRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          width - badgeTp.width - 18,
+          2,
+          badgeTp.width + 14,
+          badgeTp.height + 8,
+        ),
+        const Radius.circular(20),
+      );
+      canvas.drawRRect(badgeRect, Paint()..color = badgeColor.withOpacity(0.12));
+      badgeTp.paint(canvas, Offset(width - badgeTp.width - 11, 6));
     }
   }
 
