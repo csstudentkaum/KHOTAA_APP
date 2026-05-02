@@ -828,7 +828,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             Expanded(
               child: _buildMetricCard(
                 icon: Icons.thermostat_rounded,
-                label: 'Temperature',
+                label: 'Avg Temperature',
                 value: '${_sensorService.temperature.toStringAsFixed(1)}°C',
                 color: _getTempColor(_sensorService.temperature),
                 gradient: [

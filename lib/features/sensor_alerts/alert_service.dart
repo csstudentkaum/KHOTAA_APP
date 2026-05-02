@@ -38,9 +38,6 @@ class AlertService extends ChangeNotifier {
   // Current patient ID
   String? _currentPatientId;
 
-  // Flag to use sample data only (no Firestore)
-  bool _useSampleDataOnly = false;
-
   // Firestore subscription
   StreamSubscription? _firestoreSubscription;
 
@@ -114,8 +111,6 @@ class AlertService extends ChangeNotifier {
           .snapshots()
           .listen(
             (snapshot) {
-              if (_useSampleDataOnly) return;
-
               for (var change in snapshot.docChanges) {
                 if (change.type == DocumentChangeType.added) {
                   final alert = SmartAlert.fromFirestore(change.doc);
@@ -313,130 +308,6 @@ class AlertService extends ChangeNotifier {
   /// Clear all alerts (for testing)
   Future<void> clearAllAlerts() async {
     _alerts.clear();
-    _saveLocalAlerts();
-    notifyListeners();
-  }
-
-  /// Add sample alerts for testing/demo (only once, preserves viewed state)
-  Future<void> addSampleAlerts() async {
-    if (_currentPatientId == null) return;
-
-    _useSampleDataOnly = true;
-
-    final hasExistingSamples = _alerts.any((a) => a.id.startsWith('sample_'));
-    if (hasExistingSamples) {
-      debugPrint(
-        'AlertService: Sample alerts already exist, skipping (preserving viewed state)',
-      );
-      return;
-    }
-
-    final samples = [
-      SmartAlert(
-        id: 'sample_health_pressure_001',
-        title: 'High Pressure Alert',
-        shortDescription: 'Excessive pressure on left foot heel (265 kPa)',
-        detailedExplanation:
-            'Your smart insole has detected high pressure (265 kPa) on your left foot '
-            'in the heel region.\n\n'
-            'According to IWGDF 2023 Guidelines: Peak pressure ≥200 kPa indicates elevated '
-            'ulcer risk. Pressure management is critical for diabetic foot care.',
-        riskLevel: RiskLevel.high,
-        category: RiskCategory.pressure,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-        patientId: _currentPatientId!,
-        notificationType: NotificationType.health,
-        recommendationTitle: 'Pressure Offloading Required',
-        recommendationDescription:
-            'Reduce weight-bearing immediately. Use offloading footwear or devices if available.',
-        instructions:
-            '1. Stop current activity and rest immediately\n'
-            '2. Use therapeutic footwear with custom insoles\n'
-            '3. Consider walking aids to redistribute pressure\n'
-            '4. Avoid barefoot walking\n'
-            '5. Consult healthcare provider if pressure persists',
-      ),
-      SmartAlert(
-        id: 'sample_health_temp_001',
-        title: 'Temperature Alert',
-        shortDescription: 'Elevated temperature difference detected (3.1°C)',
-        detailedExplanation:
-            'Your smart insole has detected a temperature difference of 3.1°C between feet.\n\n'
-            'According to IWGDF 2023 Guidelines: Temperature asymmetry ≥2.2°C between '
-            'corresponding foot regions indicates inflammation and elevated ulcer risk.',
-        riskLevel: RiskLevel.high,
-        category: RiskCategory.temperature,
-        timestamp: DateTime.now().subtract(const Duration(hours: 1)),
-        patientId: _currentPatientId!,
-        notificationType: NotificationType.health,
-        isViewed: true,
-        recommendationTitle: 'Monitor Foot Temperature',
-        recommendationDescription:
-            'Rest and monitor. Contact healthcare provider if asymmetry persists >48 hours.',
-        instructions:
-            '1. Rest and elevate affected foot\n'
-            '2. Apply cool compress (not ice) to warmer area\n'
-            '3. Check for redness, swelling, or other signs of infection\n'
-            '4. Monitor temperature every 4 hours\n'
-            '5. Seek medical attention if difference increases or persists >48 hours',
-      ),
-      SmartAlert(
-        id: 'sample_health_pressure_002',
-        title: 'Pressure Distribution Notice',
-        shortDescription: 'Elevated pressure detected (195 kPa)',
-        detailedExplanation:
-            'Your smart insole has detected pressure above baseline (195 kPa) on metatarsal region.\n\n'
-            'According to IWGDF 2023 Guidelines: Monitor pressure levels approaching the '
-            '≥200 kPa threshold to prevent complications.',
-        riskLevel: RiskLevel.medium,
-        category: RiskCategory.pressure,
-        timestamp: DateTime.now().subtract(const Duration(hours: 3)),
-        patientId: _currentPatientId!,
-        notificationType: NotificationType.health,
-        recommendationTitle: 'Adjust Weight Distribution',
-        recommendationDescription:
-            'Shift weight periodically. Check footwear fit and consider orthotic insoles.',
-        instructions:
-            '1. Shift weight between feet every 15-20 minutes\n'
-            '2. Ensure proper footwear fit (not too tight)\n'
-            '3. Consider cushioned or therapeutic insoles\n'
-            '4. Avoid prolonged standing in the same position\n'
-            '5. Schedule footwear evaluation with healthcare provider',
-      ),
-      SmartAlert(
-        id: 'sample_appt_001',
-        title: 'Dr. Abdullah Appointment',
-        shortDescription: 'Upcoming checkup on Tuesday at 09:30 AM',
-        detailedExplanation:
-            'You have an appointment scheduled with Dr. Abdullah for your regular foot checkup.',
-        riskLevel: RiskLevel.low,
-        category: RiskCategory.pressure,
-        timestamp: DateTime.now().subtract(const Duration(days: 1)),
-        patientId: _currentPatientId!,
-        notificationType: NotificationType.appointment,
-        isViewed: true,
-      ),
-      SmartAlert(
-        id: 'sample_appt_002',
-        title: 'Follow-up Reminder',
-        shortDescription: 'Schedule your monthly follow-up',
-        detailedExplanation:
-            'Its been 4 weeks since your last checkup. Please schedule your monthly follow-up appointment.',
-        riskLevel: RiskLevel.low,
-        category: RiskCategory.pressure,
-        timestamp: DateTime.now().subtract(const Duration(days: 2)),
-        patientId: _currentPatientId!,
-        notificationType: NotificationType.appointment,
-        isViewed: true,
-      ),
-    ];
-
-    for (var alert in samples) {
-      if (!_alerts.any((a) => a.id == alert.id)) {
-        _alerts.add(alert);
-      }
-    }
-    _alerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     _saveLocalAlerts();
     notifyListeners();
   }

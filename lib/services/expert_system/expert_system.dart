@@ -290,65 +290,67 @@ class KhotaaExpertSystem {
     );
   }
 
-  /// HIGH RISK recommendations based on IWGDF 2023 Prevention Guideline
-  /// Combined temperature and pressure abnormality indicates pre-ulcerative state
+  /// COMBINED RISK recommendations — IWGDF 2023 (Prevention + Offloading Guidelines)
+  /// Simultaneous temperature asymmetry ≥2.2°C and pressure ≥200 kPa: pre-ulcerative state
+  /// Reference: Bus et al. (2023) IWGDF Guidelines on prevention and offloading
   List<RecommendedAction> _getHighRiskRecommendations(SensorRegion region) {
     return [
       RecommendedAction(
-        title: 'Offload Immediately',
-        description: 'Stop weight-bearing on the affected foot',
-        instructions: 'Sit or lie down. Elevate your foot above heart level for 15-20 minutes.',
-        isUrgent: true,
-      ),
-      RecommendedAction(
-        title: 'Inspect Your Foot',
-        description: 'Check for signs of tissue damage',
-        instructions: 'Look for redness, swelling, warmth, blisters, or open wounds in ${region.displayName}.',
-        isUrgent: true,
-      ),
-      RecommendedAction(
-        title: 'Contact Healthcare Provider',
-        description: 'Seek professional evaluation within 24 hours',
-        instructions: 'Combined abnormalities indicate elevated ulcer risk. Do not delay medical consultation.',
+        title: 'Urgent: Stop Activity Immediately',
+        description:
+            'Combined elevated pressure and skin temperature asymmetry indicate a pre-ulcerative state. '
+            'Immediate action is required to prevent diabetic foot ulceration (IWGDF 2023).',
+        instructions: '1. Stop all weight-bearing activity immediately\n'
+            '2. Sit or lie down and elevate your foot above heart level\n'
+            '3. Inspect the ${region.displayName} for redness, warmth, swelling, or blisters\n'
+            '4. Do not apply heat or massage the affected area\n'
+            '5. Use a wheelchair or crutches if you must move\n'
+            '6. Contact your healthcare provider or diabetic foot clinic today — do not wait',
         isUrgent: true,
       ),
     ];
   }
 
-  /// TEMPERATURE recommendations based on IWGDF 2023
-  /// Temperature asymmetry ≥2.2°C may indicate inflammation or early infection
+  /// TEMPERATURE recommendations — IWGDF 2023 Prevention Guideline
+  /// Temperature asymmetry ≥2.2°C between feet signals early inflammation or increased ulcer risk
+  /// Reference: Armstrong et al. (2007); Bus et al. (2023) IWGDF Prevention Guideline
   List<RecommendedAction> _getTemperatureRecommendations(SensorRegion region) {
     return [
       RecommendedAction(
-        title: 'Monitor Temperature',
-        description: 'Temperature difference detected between feet',
-        instructions: 'Rest your feet and recheck in 1-2 hours. If asymmetry persists, reduce activity.',
-        isUrgent: false,
-      ),
-      RecommendedAction(
-        title: 'Inspect the Warmer Foot',
-        description: 'Check for early signs of inflammation',
-        instructions: 'Look for redness or swelling in ${region.displayName}. Avoid tight footwear.',
+        title: 'Elevated Skin Temperature Detected',
+        description:
+            'A temperature difference of ≥2.2°C between your feet has been detected in the ${region.displayName}. '
+            'This is a clinically recognised early warning sign of inflammation or increased ulceration risk '
+            'according to the IWGDF 2023 Prevention Guideline.',
+        instructions: '1. Stop activity and rest your feet for at least 30 minutes\n'
+            '2. Remove shoes and socks to allow the foot to cool naturally\n'
+            '3. Inspect the warmer foot for redness, swelling, or any skin changes\n'
+            '4. Avoid tight footwear, socks with seams, or anything that restricts circulation\n'
+            '5. Recheck temperature after 30 minutes — if asymmetry persists, reduce activity for the day\n'
+            '6. Inform your healthcare provider at your next visit, or sooner if skin changes appear',
         isUrgent: false,
       ),
     ];
   }
 
-  /// PRESSURE recommendations based on IWGDF 2023 Offloading Guideline
-  /// Peak plantar pressure ≥200 kPa increases ulceration risk
+  /// PRESSURE recommendations — IWGDF 2023 Offloading Guideline
+  /// Peak plantar pressure ≥200 kPa significantly increases diabetic foot ulceration risk
+  /// Reference: Bus et al. (2023) IWGDF Offloading Guideline; Cavanagh & Ulbrecht (1994)
   List<RecommendedAction> _getPressureRecommendations(SensorRegion region) {
     return [
       RecommendedAction(
-        title: 'Reduce Weight-Bearing',
-        description: 'Lower plantar pressure to prevent tissue damage',
-        instructions: 'Take a seated break. Avoid prolonged standing or walking.',
-        isUrgent: false,
-      ),
-      RecommendedAction(
-        title: 'Check Your Footwear',
-        description: 'Ensure proper cushioning and fit',
-        instructions: 'Use therapeutic footwear with pressure redistribution. Avoid flat or hard-soled shoes.',
-        isUrgent: false,
+        title: 'Pressure Offloading Required',
+        description:
+            'Peak plantar pressure in the ${region.displayName} exceeds the safe threshold of 200 kPa. '
+            'Sustained high pressure on insensate diabetic feet is a leading cause of foot ulceration, '
+            'as stated in the IWGDF 2023 Offloading Guideline.',
+        instructions: '1. Stop current activity and rest immediately\n'
+            '2. Use therapeutic footwear with cushioned, pressure-redistributing insoles\n'
+            '3. Consider walking aids (crutches or walking frame) to reduce foot loading\n'
+            '4. Avoid barefoot walking — even short distances indoors\n'
+            '5. Avoid flat, hard-soled shoes or sandals without cushioning\n'
+            '6. Consult your healthcare provider if elevated pressure readings persist',
+        isUrgent: true,
       ),
     ];
   }

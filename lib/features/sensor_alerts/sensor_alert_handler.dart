@@ -171,8 +171,6 @@ class SensorAlertHandler {
       String title;
       if (hasTemp && hasPressure) {
         title = 'Pressure & Temperature Alert';
-      } else if (isHighRisk) {
-        title = 'High Risk Alert';
       } else if (hasTemp) {
         title = 'Temperature Asymmetry';
       } else {

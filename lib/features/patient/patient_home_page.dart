@@ -84,8 +84,6 @@ class _PatientHomePageState extends State<PatientHomePage>
         return;
       }
       await AlertService().initialize(user.uid);
-      // Add sample alerts for demo
-      await AlertService().addSampleAlerts();
     } catch (e) {
       debugPrint('Error initializing alert service: $e');
     }

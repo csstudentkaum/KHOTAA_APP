@@ -165,9 +165,9 @@ class SensorDataService extends ChangeNotifier {
       _leftPressureWindow.clear();
     }
 
-    // Update headline display values
-    _temperature = snap.temperatureC.reduce(max);
-    _pressure = snap.pressureKpa.reduce(max);
+    // Update headline display values — average across all regions
+    _temperature = snap.temperatureC.reduce((a, b) => a + b) / snap.temperatureC.length;
+    _pressure = snap.pressureKpa.reduce((a, b) => a + b) / snap.pressureKpa.length;
 
     notifyListeners();
   }

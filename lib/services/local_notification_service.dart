@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -95,20 +95,25 @@ class LocalNotificationService {
     // Pick channel based on type
     final isRiskAlert = riskAlertTypes.contains(type);
 
+    // Channel IDs use versioned names — changing the ID forces Android to
+    // recreate the channel with the correct importance level.
+    // Android caches channel settings after first creation, so any
+    // importance change requires a new channel ID.
     final androidDetails = AndroidNotificationDetails(
-      isRiskAlert ? 'risk_alerts' : 'general',
-      isRiskAlert ? 'Risk Alerts' : 'General Notifications',
+      isRiskAlert ? 'khotaa_risk_alerts_v2' : 'khotaa_general_v2',
+      isRiskAlert ? 'Khotaa Risk Alerts' : 'Khotaa General',
       channelDescription: isRiskAlert
-          ? 'Alerts for abnormal temperature and pressure readings'
+          ? 'High-priority alerts for abnormal foot temperature and pressure readings'
           : 'Booking updates and general notifications',
-      importance: isRiskAlert ? Importance.high : Importance.defaultImportance,
-      priority: isRiskAlert ? Priority.high : Priority.defaultPriority,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound(
-        isRiskAlert ? 'alert_sound' : 'notification_sound',
-      ),
+      importance: isRiskAlert ? Importance.max : Importance.defaultImportance,
+      priority: isRiskAlert ? Priority.max : Priority.defaultPriority,
+      playSound: false, // sound played separately via AudioPlayer to avoid double sound
       enableVibration: true,
+      enableLights: true,
+      ledColor: const Color(0xFFE53935),
       icon: '@mipmap/ic_launcher',
+      ticker: isRiskAlert ? 'Health alert from Khotaa' : null,
+      styleInformation: BigTextStyleInformation(''),
     );
 
     final darwinDetails = DarwinNotificationDetails(
