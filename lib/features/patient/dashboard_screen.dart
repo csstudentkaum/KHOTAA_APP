@@ -167,9 +167,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  // Legacy helper kept for the alert banner.
-  Color _getStatusColor() => _severityVisuals().color;
-
   // Get abnormal message for alert banner
   String _getAbnormalMessage() {
     switch (_sensorService.abnormalType) {
@@ -197,7 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         border: Border.all(color: const Color(0xFFFFCC02), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -208,7 +205,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFCC02).withOpacity(0.2),
+              color: const Color(0xFFFFCC02).withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -305,7 +302,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -327,14 +324,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ? const Color(0xFF4CAF50)
                       : const Color(0xFFE53935),
                   iconBgColor: _isConnected
-                      ? const Color(0xFF4CAF50).withOpacity(0.1)
-                      : const Color(0xFFE53935).withOpacity(0.1),
+                      ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
+                      : const Color(0xFFE53935).withValues(alpha: 0.1),
                 ),
               ),
               Container(
                 height: 50,
                 width: 1,
-                color: Colors.grey.withOpacity(0.2),
+                color: Colors.grey.withValues(alpha: 0.2),
               ),
               // Live Monitoring
               Expanded(child: _buildLiveMonitoringIndicator()),
@@ -396,14 +393,14 @@ class _DashboardScreenState extends State<DashboardScreen>
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withOpacity(0.1),
+                color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: _isConnected
                     ? [
                         BoxShadow(
                           color: const Color(
                             0xFF4CAF50,
-                          ).withOpacity(0.3 * _pulseAnimation.value),
+                          ).withValues(alpha: 0.3 * _pulseAnimation.value),
                           blurRadius: 15 * _pulseAnimation.value,
                           spreadRadius: 2 * _pulseAnimation.value,
                         ),
@@ -445,7 +442,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         BoxShadow(
                           color: const Color(
                             0xFF4CAF50,
-                          ).withOpacity(0.5 * _pulseAnimation.value),
+                          ).withValues(alpha: 0.5 * _pulseAnimation.value),
                           blurRadius: 6 * _pulseAnimation.value,
                         ),
                       ],
@@ -485,13 +482,13 @@ class _DashboardScreenState extends State<DashboardScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            statusColor.withOpacity(0.1),
-            statusColor.withOpacity(0.05),
+            statusColor.withValues(alpha: 0.1),
+            statusColor.withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: statusColor.withOpacity(0.3),
+          color: statusColor.withValues(alpha: 0.3),
           width: 1.5,
         ),
       ),
@@ -500,7 +497,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.15),
+              color: statusColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -547,7 +544,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -573,7 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF64ADB3).withOpacity(0.1),
+                  color: const Color(0xFF64ADB3).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -832,8 +829,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 value: '${_sensorService.temperature.toStringAsFixed(1)}°C',
                 color: _getTempColor(_sensorService.temperature),
                 gradient: [
-                  _getTempColor(_sensorService.temperature).withOpacity(0.15),
-                  _getTempColor(_sensorService.temperature).withOpacity(0.05),
+                  _getTempColor(_sensorService.temperature).withValues(alpha: 0.15),
+                  _getTempColor(_sensorService.temperature).withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -845,8 +842,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 value: '${_sensorService.pressure.toStringAsFixed(0)} kPa',
                 color: _getPressureColor(_sensorService.pressure / 100),
                 gradient: [
-                  _getPressureColor(_sensorService.pressure / 100).withOpacity(0.15),
-                  _getPressureColor(_sensorService.pressure / 100).withOpacity(0.05),
+                  _getPressureColor(_sensorService.pressure / 100).withValues(alpha: 0.15),
+                  _getPressureColor(_sensorService.pressure / 100).withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -862,8 +859,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 value: _formatNumber(_sensorService.stepsToday),
                 color: const Color(0xFF5C6BC0),
                 gradient: [
-                  const Color(0xFF5C6BC0).withOpacity(0.15),
-                  const Color(0xFF5C6BC0).withOpacity(0.05),
+                  const Color(0xFF5C6BC0).withValues(alpha: 0.15),
+                  const Color(0xFF5C6BC0).withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -875,8 +872,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 value: _formatDuration(_sensorService.wearingDuration),
                 color: const Color(0xFF26A69A),
                 gradient: [
-                  const Color(0xFF26A69A).withOpacity(0.15),
-                  const Color(0xFF26A69A).withOpacity(0.05),
+                  const Color(0xFF26A69A).withValues(alpha: 0.15),
+                  const Color(0xFF26A69A).withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -900,7 +897,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),
@@ -973,7 +970,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF64ADB3).withOpacity(0.4),
+            color: const Color(0xFF64ADB3).withValues(alpha: 0.4),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
