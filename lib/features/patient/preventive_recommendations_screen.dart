@@ -80,7 +80,7 @@ class _PreventiveRecommendationsScreenState
       case alert_model.RiskCategory.temperature:
         return RecommendationType.temperature;
       case alert_model.RiskCategory.combined:
-        return RecommendationType.pressure; // Combined uses pressure type
+        return RecommendationType.combined;
     }
   }
 
@@ -602,16 +602,29 @@ class _RecommendationCard extends StatelessWidget {
             color: _getRecommendationTypeColor(item.type).withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(
-            item.type.name.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: item.isCompleted
-                  ? Colors.grey[500]
-                  : _getRecommendationTypeColor(item.type),
-              letterSpacing: 0.5,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _typeIcon(item.type),
+                size: 10,
+                color: item.isCompleted
+                    ? Colors.grey[500]
+                    : _getRecommendationTypeColor(item.type),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                _typeLabel(item.type),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: item.isCompleted
+                      ? Colors.grey[500]
+                      : _getRecommendationTypeColor(item.type),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
@@ -836,40 +849,68 @@ class _DetailBottomSheet extends StatelessWidget {
   }
 
   Widget _buildUrgencyBadge() {
-    // Show type category instead of urgency
-    String label = item.type.name.toUpperCase();
-    Color color = _getRecommendationTypeColor(item.type);
-
+    final color = _getRecommendationTypeColor(item.type);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_typeIcon(item.type), size: 12, color: color),
+          const SizedBox(width: 5),
+          Text(
+            _typeLabel(item.type),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// Helper function - used by multiple widgets
+// Helper functions - used by multiple widgets
+IconData _typeIcon(RecommendationType type) {
+  switch (type) {
+    case RecommendationType.pressure:
+      return Icons.compress;
+    case RecommendationType.temperature:
+      return Icons.thermostat;
+    case RecommendationType.combined:
+      return Icons.warning_amber_rounded;
+  }
+}
+
+String _typeLabel(RecommendationType type) {
+  switch (type) {
+    case RecommendationType.pressure:
+      return 'PRESSURE';
+    case RecommendationType.temperature:
+      return 'TEMPERATURE';
+    case RecommendationType.combined:
+      return 'COMBINED';
+  }
+}
+
 Color _getRecommendationTypeColor(RecommendationType type) {
   switch (type) {
     case RecommendationType.pressure:
       return const Color(0xFF5C6BC0); // Indigo for pressure
     case RecommendationType.temperature:
       return const Color(0xFFFF7043); // Orange for temperature
+    case RecommendationType.combined:
+      return const Color(0xFFE53935); // Red for combined (high risk)
   }
 }
 
 // Data Models - Only pressure and temperature (matching Smart Insole)
-enum RecommendationType { pressure, temperature }
+enum RecommendationType { pressure, temperature, combined }
 
 class RecommendationItem {
   final String id;
