@@ -384,11 +384,17 @@ class _PreventiveRecommendationsScreenState
   }
 
   void _showDetailDialog(RecommendationItem item) {
+    final index = _recommendations.indexOf(item);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _DetailBottomSheet(item: item),
+      builder: (context) => _DetailBottomSheet(
+        item: item,
+        onMarkComplete: index != -1 && !item.isCompleted
+            ? () => _toggleComplete(index)
+            : null,
+      ),
     );
   }
 
@@ -621,19 +627,6 @@ class _RecommendationCard extends StatelessWidget {
             decoration: item.isCompleted ? TextDecoration.lineThrough : null,
           ),
         ),
-        const SizedBox(height: 4),
-        // Description
-        Text(
-          item.description,
-          style: TextStyle(
-            fontSize: 14,
-            color: item.isCompleted
-                ? Colors.grey[400]
-                : const Color(0xFF6B7280),
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
         const SizedBox(height: 8),
         // Date/Time
         Row(
@@ -695,8 +688,9 @@ class _RecommendationCard extends StatelessWidget {
 /// Detail Bottom Sheet
 class _DetailBottomSheet extends StatelessWidget {
   final RecommendationItem item;
+  final VoidCallback? onMarkComplete;
 
-  const _DetailBottomSheet({required this.item});
+  const _DetailBottomSheet({required this.item, this.onMarkComplete});
 
   @override
   Widget build(BuildContext context) {
@@ -755,6 +749,15 @@ class _DetailBottomSheet extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           _buildUrgencyBadge(),
+                          const SizedBox(height: 8),
+                          Text(
+                            item.description,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF6B7280),
+                              height: 1.4,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -791,21 +794,36 @@ class _DetailBottomSheet extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      if (onMarkComplete != null) onMarkComplete!();
+                      Navigator.pop(context);
+                    },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF64ADB3),
+                      backgroundColor: onMarkComplete != null
+                          ? const Color(0xFF66BB6A)
+                          : const Color(0xFF64ADB3),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Got it!',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (onMarkComplete != null) ...
+                          const [
+                            Icon(Icons.check_circle_outline, size: 20),
+                            SizedBox(width: 8),
+                          ],
+                        const Text(
+                          'Got it!',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

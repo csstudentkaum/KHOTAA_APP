@@ -298,8 +298,7 @@ class KhotaaExpertSystem {
       RecommendedAction(
         title: 'Urgent: Stop Activity Immediately',
         description:
-            'Combined elevated pressure and skin temperature asymmetry indicate a pre-ulcerative state. '
-            'Immediate action is required to prevent diabetic foot ulceration (IWGDF 2023).',
+            'Combined elevated pressure and skin temperature asymmetry detected.',
         instructions: '1. Stop all weight-bearing activity immediately\n'
             '2. Sit or lie down and elevate your foot above heart level\n'
             '3. Inspect the ${region.displayName} for redness, warmth, swelling, or blisters\n'
@@ -319,9 +318,7 @@ class KhotaaExpertSystem {
       RecommendedAction(
         title: 'Elevated Skin Temperature Detected',
         description:
-            'A temperature difference of ≥2.2°C between your feet has been detected in the ${region.displayName}. '
-            'This is a clinically recognised early warning sign of inflammation or increased ulceration risk '
-            'according to the IWGDF 2023 Prevention Guideline.',
+            'Temperature difference ≥2.2°C detected in the ${region.displayName}.',
         instructions: '1. Stop activity and rest your feet for at least 30 minutes\n'
             '2. Remove shoes and socks to allow the foot to cool naturally\n'
             '3. Inspect the warmer foot for redness, swelling, or any skin changes\n'
@@ -341,9 +338,7 @@ class KhotaaExpertSystem {
       RecommendedAction(
         title: 'Pressure Offloading Required',
         description:
-            'Peak plantar pressure in the ${region.displayName} exceeds the safe threshold of 200 kPa. '
-            'Sustained high pressure on insensate diabetic feet is a leading cause of foot ulceration, '
-            'as stated in the IWGDF 2023 Offloading Guideline.',
+            'Peak plantar pressure in the ${region.displayName} exceeds the 200 kPa safe threshold.',
         instructions: '1. Stop current activity and rest immediately\n'
             '2. Use therapeutic footwear with cushioned, pressure-redistributing insoles\n'
             '3. Consider walking aids (crutches or walking frame) to reduce foot loading\n'
