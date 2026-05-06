@@ -17,7 +17,10 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      return web;
+      throw UnsupportedError(
+        'DefaultFirebaseOptions have not been configured for web - '
+        'you can reconfigure this by running the FlutterFire CLI again.',
+      );
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -25,9 +28,15 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        return macos;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for macos - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.windows:
-        return windows;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for windows - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -45,47 +54,17 @@ class DefaultFirebaseOptions {
     appId: '1:702053481596:android:244de0dcb6300ebce9ddf9',
     messagingSenderId: '702053481596',
     projectId: 'khotaa-app',
-    databaseURL: 'https://khotaa-app-default-rtdb.firebaseio.com',
     storageBucket: 'khotaa-app.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyANogRvU6eROMfsXM5ruXPqJl7ZD9r6UY4',
-    appId: '1:702053481596:ios:3f17311d2b496e50e9ddf9',
+    appId: '1:702053481596:ios:4240804f63920034e9ddf9',
     messagingSenderId: '702053481596',
     projectId: 'khotaa-app',
-    databaseURL: 'https://khotaa-app-default-rtdb.firebaseio.com',
     storageBucket: 'khotaa-app.firebasestorage.app',
-    iosBundleId: 'com.khotaa.app.khotaaApp',
-  );
-
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAryw4m7MK5lYD5Xa9_ZzBYjCt5NGLqINs',
-    appId: '1:702053481596:web:61d7d01ab6b4dbeee9ddf9',
-    messagingSenderId: '702053481596',
-    projectId: 'khotaa-app',
-    authDomain: 'khotaa-app.firebaseapp.com',
-    databaseURL: 'https://khotaa-app-default-rtdb.firebaseio.com',
-    storageBucket: 'khotaa-app.firebasestorage.app',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyANogRvU6eROMfsXM5ruXPqJl7ZD9r6UY4',
-    appId: '1:702053481596:ios:3f17311d2b496e50e9ddf9',
-    messagingSenderId: '702053481596',
-    projectId: 'khotaa-app',
-    databaseURL: 'https://khotaa-app-default-rtdb.firebaseio.com',
-    storageBucket: 'khotaa-app.firebasestorage.app',
-    iosBundleId: 'com.khotaa.app.khotaaApp',
-  );
-
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAryw4m7MK5lYD5Xa9_ZzBYjCt5NGLqINs',
-    appId: '1:702053481596:web:e54e5735835504a1e9ddf9',
-    messagingSenderId: '702053481596',
-    projectId: 'khotaa-app',
-    authDomain: 'khotaa-app.firebaseapp.com',
-    databaseURL: 'https://khotaa-app-default-rtdb.firebaseio.com',
-    storageBucket: 'khotaa-app.firebasestorage.app',
+    iosClientId:
+        '702053481596-ios4240804f63920034e9ddf9.apps.googleusercontent.com',
+    iosBundleId: 'com.khotaa.app',
   );
 }
