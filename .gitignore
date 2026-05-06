@@ -55,3 +55,4 @@ app.*.map.json
 *.local.json
 *.local.plist
 
+node_modules/

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
+import '../../models/medical_images.dart';
 import '../../services/firebase/image_analysis_service.dart';
 import 'analysis_result_screen.dart';
 
@@ -12,8 +15,9 @@ const _kPink = Color(0xFFF1AAAF);
 /// Progress screen — uploads to Firebase, runs analysis, shows animated
 /// circular progress that matches the Figma "Image Analysis in Progress" UI.
 class AnalysisProgressScreen extends StatefulWidget {
-  final File imageFile;
-  const AnalysisProgressScreen({super.key, required this.imageFile});
+  final File? imageFile;
+  final Uint8List? imageBytes;
+  const AnalysisProgressScreen({super.key, this.imageFile, this.imageBytes});
 
   @override
   State<AnalysisProgressScreen> createState() => _AnalysisProgressScreenState();
@@ -54,13 +58,21 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
     try {
       // Step 1 – upload
       _animateTo(0.30);
-      final image = await _service.uploadImage(widget.imageFile);
+      final MedicalImages image;
+      if (kIsWeb || widget.imageFile == null) {
+        image = await _service.uploadImageBytes(widget.imageBytes!);
+      } else {
+        image = await _service.uploadImage(widget.imageFile!);
+      }
 
       if (!mounted) return;
       _animateTo(0.70);
 
-      // Step 2 – analyse
-      final analysis = await _service.analyse(image);
+      // Step 2 – analyse (pass bytes to avoid re-fetching from Storage on web)
+      final analysis = await _service.analyse(
+        image,
+        imageBytes: widget.imageBytes,
+      );
 
       if (!mounted) return;
       _animateTo(1.0);
@@ -74,6 +86,7 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
         MaterialPageRoute(
           builder: (_) => AnalysisResultScreen(
             imageFile: widget.imageFile,
+            imageBytes: widget.imageBytes,
             image: image,
             analysis: analysis,
           ),
@@ -124,8 +137,11 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
                   onTap: () => Navigator.pop(context),
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 22),
+                    child: Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                 ),
               ),
@@ -141,9 +157,17 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(
-                        left: 28, right: 28, top: 55, bottom: 40),
+                      left: 28,
+                      right: 28,
+                      top: 55,
+                      bottom: 40,
+                    ),
                     padding: const EdgeInsets.only(
-                        left: 28, right: 28, top: 80, bottom: 36),
+                      left: 28,
+                      right: 28,
+                      top: 80,
+                      bottom: 36,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
@@ -173,9 +197,10 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
 
   Widget _buildRobotIcon() {
     return ScaleTransition(
-      scale: Tween<double>(begin: 0.94, end: 1.06).animate(
-        CurvedAnimation(parent: _breathe, curve: Curves.easeInOut),
-      ),
+      scale: Tween<double>(
+        begin: 0.94,
+        end: 1.06,
+      ).animate(CurvedAnimation(parent: _breathe, curve: Curves.easeInOut)),
       child: Container(
         width: 110,
         height: 110,
@@ -184,10 +209,7 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFA3FBFF),
-              Color(0xFF629699),
-            ],
+            colors: [Color(0xFFA3FBFF), Color(0xFF629699)],
           ),
           boxShadow: [
             BoxShadow(
@@ -208,8 +230,11 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
                 colors: [Color(0xFF3D6A99), Color(0xFF2F4A5F)],
               ),
             ),
-            child: const Icon(Icons.smart_toy_rounded,
-                size: 50, color: Colors.white),
+            child: const Icon(
+              Icons.smart_toy_rounded,
+              size: 50,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -293,8 +318,11 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
             shape: BoxShape.circle,
             color: AppColors.error.withValues(alpha: 0.1),
           ),
-          child: const Icon(Icons.error_outline,
-              size: 36, color: AppColors.error),
+          child: const Icon(
+            Icons.error_outline,
+            size: 36,
+            color: AppColors.error,
+          ),
         ),
         const SizedBox(height: 20),
         Text(
@@ -327,7 +355,8 @@ class _AnalysisProgressScreenState extends State<AnalysisProgressScreen>
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: _kTeal),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Retry'),
           ),

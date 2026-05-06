@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,6 +23,7 @@ class _AiDoctorScreenState extends State<AiDoctorScreen>
     with SingleTickerProviderStateMixin {
   final _picker = ImagePicker();
   File? _image;
+  Uint8List? _imageBytes;
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
@@ -50,15 +53,24 @@ class _AiDoctorScreenState extends State<AiDoctorScreen>
       maxWidth: 1024,
       imageQuality: 85,
     );
-    if (xfile != null && mounted) setState(() => _image = File(xfile.path));
+    if (xfile != null && mounted) {
+      final bytes = await xfile.readAsBytes();
+      setState(() {
+        _image = kIsWeb ? null : File(xfile.path);
+        _imageBytes = bytes;
+      });
+    }
   }
 
   void _submit() {
-    if (_image == null) return;
+    if (_imageBytes == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AnalysisProgressScreen(imageFile: _image!),
+        builder: (_) => AnalysisProgressScreen(
+          imageFile: kIsWeb ? null : _image,
+          imageBytes: _imageBytes,
+        ),
       ),
     );
   }
@@ -223,7 +235,9 @@ class _AiDoctorScreenState extends State<AiDoctorScreen>
                       onTap: _showSourcePicker,
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
-                        child: _image != null ? _imagePreview() : _uploadZone(),
+                        child: _imageBytes != null
+                            ? _imagePreview()
+                            : _uploadZone(),
                       ),
                     ),
                   ),
@@ -387,12 +401,19 @@ class _AiDoctorScreenState extends State<AiDoctorScreen>
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: Image.file(
-            _image!,
-            width: double.infinity,
-            height: 260,
-            fit: BoxFit.cover,
-          ),
+          child: (kIsWeb || _image == null)
+              ? Image.memory(
+                  _imageBytes!,
+                  width: double.infinity,
+                  height: 260,
+                  fit: BoxFit.cover,
+                )
+              : Image.file(
+                  _image!,
+                  width: double.infinity,
+                  height: 260,
+                  fit: BoxFit.cover,
+                ),
         ),
         Positioned(
           top: 10,
@@ -421,7 +442,7 @@ class _AiDoctorScreenState extends State<AiDoctorScreen>
   // ── Analyze button ────────────────────────────────────────────────
 
   Widget _analyzeButton() {
-    final enabled = _image != null;
+    final enabled = _imageBytes != null;
     return SizedBox(
       width: double.infinity,
       height: 54,

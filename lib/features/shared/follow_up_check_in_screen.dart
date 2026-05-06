@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -27,6 +29,7 @@ class _FollowUpCheckInScreenState extends State<FollowUpCheckInScreen> {
   bool _isSaving = false;
   String? _photoUrl;
   File? _photoFile;
+  Uint8List? _photoBytes;
   String? _medicationAdherence; // 'yes', 'partial', 'no'
 
   @override
@@ -55,13 +58,18 @@ class _FollowUpCheckInScreenState extends State<FollowUpCheckInScreen> {
     );
     if (picked == null) return;
 
+    final bytes = await picked.readAsBytes();
     setState(() {
-      _photoFile = File(picked.path);
+      _photoFile = kIsWeb ? null : File(picked.path);
+      _photoBytes = bytes;
       _isSaving = true;
     });
 
     try {
-      final url = await _uploadPhoto(File(picked.path));
+      final url = await _uploadPhotoBytes(
+        bytes,
+        picked.path.split('.').last.toLowerCase(),
+      );
       setState(() {
         _photoUrl = url;
         _isSaving = false;
@@ -79,11 +87,13 @@ class _FollowUpCheckInScreenState extends State<FollowUpCheckInScreen> {
     }
   }
 
-  Future<String> _uploadPhoto(File file) async {
+  Future<String> _uploadPhotoBytes(
+    Uint8List bytes, [
+    String ext = 'jpg',
+  ]) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    final ext = file.path.split('.').last.toLowerCase();
     final mimeMap = {
       'jpg': 'image/jpeg',
       'jpeg': 'image/jpeg',
@@ -107,8 +117,17 @@ class _FollowUpCheckInScreenState extends State<FollowUpCheckInScreen> {
       },
     );
 
-    final task = await ref.putFile(file, metadata);
+    final task = await ref.putData(bytes, metadata);
     return task.ref.getDownloadURL();
+  }
+
+  // _uploadPhoto kept for non-web fallback
+  // ignore: unused_element
+  Future<String> _uploadPhoto(File file) async {
+    return _uploadPhotoBytes(
+      await file.readAsBytes(),
+      file.path.split('.').last.toLowerCase(),
+    );
   }
 
   Future<void> _submit() async {
@@ -493,15 +512,17 @@ class _FollowUpCheckInScreenState extends State<FollowUpCheckInScreen> {
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
-                                child: _photoFile != null
-                                    ? Image.file(
-                                        _photoFile!,
+                                child:
+                                    (_photoBytes != null &&
+                                        (kIsWeb || _photoFile == null))
+                                    ? Image.memory(
+                                        _photoBytes!,
                                         height: 180,
                                         width: double.infinity,
                                         fit: BoxFit.cover,
                                       )
-                                    : Image.network(
-                                        _photoUrl!,
+                                    : Image.file(
+                                        _photoFile!,
                                         height: 180,
                                         width: double.infinity,
                                         fit: BoxFit.cover,

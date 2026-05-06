@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
@@ -20,13 +21,15 @@ const _kTeal = Color(0xFF64ADB3);
 /// actionable recommendations, and whether they should see a doctor.
 /// Includes a "Download Report" button.
 class AnalysisResultScreen extends StatelessWidget {
-  final File imageFile;
+  final File? imageFile;
+  final Uint8List? imageBytes;
   final MedicalImages image;
   final ImageAnalysis analysis;
 
   const AnalysisResultScreen({
     super.key,
-    required this.imageFile,
+    this.imageFile,
+    this.imageBytes,
     required this.image,
     required this.analysis,
   });
@@ -148,7 +151,9 @@ class AnalysisResultScreen extends StatelessWidget {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            Image.file(imageFile, fit: BoxFit.cover),
+            (kIsWeb || imageFile == null)
+                ? Image.memory(imageBytes!, fit: BoxFit.cover)
+                : Image.file(imageFile!, fit: BoxFit.cover),
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -840,8 +845,9 @@ class AnalysisResultScreen extends StatelessWidget {
       final pdf = pw.Document();
 
       // Read image bytes for the PDF
-      final Uint8List imageBytes = await imageFile.readAsBytes();
-      final pdfImage = pw.MemoryImage(imageBytes);
+      final Uint8List pdfImageBytes =
+          imageBytes ?? await imageFile!.readAsBytes();
+      final pdfImage = pw.MemoryImage(pdfImageBytes);
 
       final riskPdfColor = switch (analysis.riskLevel) {
         'Low' => PdfColors.green,

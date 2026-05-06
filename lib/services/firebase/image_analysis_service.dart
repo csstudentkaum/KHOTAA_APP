@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
@@ -31,39 +33,49 @@ class ImageAnalysisService {
   // ── 1. Upload image file ──────────────────────────────────────────
 
   Future<MedicalImages> uploadImage(File file) async {
+    return uploadImageBytes(
+      await file.readAsBytes(),
+      file.path.split('.').last.toLowerCase(),
+    );
+  }
+
+  Future<MedicalImages> uploadImageBytes(
+    Uint8List bytes, [
+    String ext = 'jpg',
+  ]) async {
     final uid = _uid ?? 'demo-user';
 
     if (!persistData) {
-      // Local-only mode — no network calls
       await Future.delayed(const Duration(milliseconds: 1200));
       final id = 'demo_${DateTime.now().millisecondsSinceEpoch}';
       return MedicalImages(
         imageID: id,
         uploadedAt: DateTime.now(),
-        filePath: file.path,
+        filePath: kIsWeb ? '' : id,
         patientId: uid,
       );
     }
 
-    // Upload image to Firebase Storage at: medical_images/{uid}/{timestamp}.jpg
-    final ext = file.path.split('.').last.toLowerCase();
     final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
-    final ref = _storage.ref().child('medical_images').child(uid).child(fileName);
+    final ref = _storage
+        .ref()
+        .child('medical_images')
+        .child(uid)
+        .child(fileName);
 
     final metadata = SettableMetadata(
       contentType: _mimeType(ext),
       customMetadata: {'patientId': uid},
     );
 
-    final task = await ref.putFile(file, metadata);
+    final task = await ref.putData(bytes, metadata);
     final imageUrl = await task.ref.getDownloadURL();
 
-    // Save record to Firestore medical_images collection
     final id = _db.collection('medical_images').doc().id;
     final record = MedicalImages(
       imageID: id,
       uploadedAt: DateTime.now(),
-      filePath: imageUrl, // Firebase Storage download URL
+      filePath: imageUrl,
       patientId: uid,
     );
 
@@ -89,7 +101,12 @@ class ImageAnalysisService {
 
   /// Returns a simulated result when useSimulatedAI is true.
   /// Replace the simulation with an HTTP call to your deployed model.
-  Future<ImageAnalysis> analyse(MedicalImages image) async {
+  /// [imageBytes] can be supplied directly (e.g. on web) to avoid
+  /// re-downloading the image from Firebase Storage (CORS issue).
+  Future<ImageAnalysis> analyse(
+    MedicalImages image, {
+    Uint8List? imageBytes,
+  }) async {
     final uid = _uid ?? 'demo-user';
 
     // ── Classification (simulated or real) ──
@@ -108,10 +125,23 @@ class ImageAnalysisService {
       final modelUrl = dotenv.env['MODEL_URL'] ?? '';
       if (modelUrl.isEmpty) throw Exception('MODEL_URL not set in .env');
 
-      // Download image bytes from Firebase Storage URL
-      final imageResp = await http.get(Uri.parse(image.filePath));
-      if (imageResp.statusCode != 200) {
-        throw Exception('Failed to fetch image for inference');
+      // Use provided bytes, or on web use Firebase Storage SDK (avoids CORS),
+      // or on native fetch from the download URL.
+      late Uint8List bytes;
+      if (imageBytes != null) {
+        bytes = imageBytes;
+      } else if (kIsWeb) {
+        // On web: use Firebase Storage SDK ref.getData() which handles CORS internally
+        final ref = _storage.refFromURL(image.filePath);
+        final data = await ref.getData();
+        if (data == null) throw Exception('Failed to fetch image from Storage');
+        bytes = data;
+      } else {
+        final imageResp = await http.get(Uri.parse(image.filePath));
+        if (imageResp.statusCode != 200) {
+          throw Exception('Failed to fetch image for inference');
+        }
+        bytes = imageResp.bodyBytes;
       }
 
       // Send as multipart file upload
@@ -119,12 +149,14 @@ class ImageAnalysisService {
         'POST',
         Uri.parse('$modelUrl/predict'),
       );
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        imageResp.bodyBytes,
-        filename: 'image.jpg',
-        contentType: MediaType('image', 'jpeg'),
-      ));
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: 'image.jpg',
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
 
@@ -181,6 +213,15 @@ class ImageAnalysisService {
     return (image: img, analysis: res);
   }
 
+  Future<({MedicalImages image, ImageAnalysis analysis})> uploadAndAnalyseBytes(
+    Uint8List bytes, [
+    String ext = 'jpg',
+  ]) async {
+    final img = await uploadImageBytes(bytes, ext);
+    final res = await analyse(img, imageBytes: bytes);
+    return (image: img, analysis: res);
+  }
+
   // ── 4. History streams ────────────────────────────────────────────
 
   Stream<List<ImageAnalysis>> historyStream() {
@@ -226,22 +267,22 @@ class ImageAnalysisService {
   }
 
   String _noteFor(UlcerClass cls) => switch (cls) {
-        UlcerClass.none =>
-          'No clinical signs of infection or ischaemia detected. '
-              'Wound appears stable. Continue routine wound care and monitoring.',
-        UlcerClass.infection =>
-          'Infection indicators detected: peri-wound erythema, possible purulence '
-              'or swelling. Evaluate for systemic signs. Consider empirical '
-              'antibiotic therapy and wound debridement as appropriate.',
-        UlcerClass.ischaemia =>
-          'Ischaemic indicators detected: pallor, delayed capillary refill, '
-              'or tissue changes suggesting reduced perfusion. Vascular '
-              'assessment (ABI / toe pressure) recommended.',
-        UlcerClass.both =>
-          'Combined infection and ischaemia indicators detected. '
-              'High-risk presentation — urgent multidisciplinary evaluation '
-              'recommended. Assess for limb-threatening involvement.',
-      };
+    UlcerClass.none =>
+      'No clinical signs of infection or ischaemia detected. '
+          'Wound appears stable. Continue routine wound care and monitoring.',
+    UlcerClass.infection =>
+      'Infection indicators detected: peri-wound erythema, possible purulence '
+          'or swelling. Evaluate for systemic signs. Consider empirical '
+          'antibiotic therapy and wound debridement as appropriate.',
+    UlcerClass.ischaemia =>
+      'Ischaemic indicators detected: pallor, delayed capillary refill, '
+          'or tissue changes suggesting reduced perfusion. Vascular '
+          'assessment (ABI / toe pressure) recommended.',
+    UlcerClass.both =>
+      'Combined infection and ischaemia indicators detected. '
+          'High-risk presentation — urgent multidisciplinary evaluation '
+          'recommended. Assess for limb-threatening involvement.',
+  };
 }
 
 class _SimResult {

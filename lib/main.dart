@@ -25,7 +25,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load .env file so dotenv.env[...] works throughout the app
-  await dotenv.load(fileName: '.env');
+  await dotenv.load(fileName: 'assets/env.txt');
 
   try {
     await Firebase.initializeApp(
@@ -77,7 +77,9 @@ void main() async {
     // Check if app was opened from a terminated state via notification
     final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
-      debugPrint('🔔 App opened from notification (terminated): ${initialMessage.data}');
+      debugPrint(
+        '🔔 App opened from notification (terminated): ${initialMessage.data}',
+      );
       _navigateToLatestAlert(initialMessage.data['type'] as String?);
     }
 
