@@ -4,7 +4,7 @@ import '../../app/app_theme.dart';
 import '../../services/bluetooth_service.dart';
 import '../../state/bluetooth_provider.dart';
 
-// ── Figma palette (same as AI Doctor screen) ────────────────────────
+
 const _kDarkBlue = Color(0xFF3D6A99);
 const _kTeal = Color(0xFF64ADB3);
 
@@ -63,7 +63,6 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Initialize BluetoothService only once
     if (!_initialized) {
       _bluetoothService = context.read<BluetoothService>();
       _initializeBluetooth();
@@ -71,26 +70,18 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     }
   }
 
-  /// Initialize Bluetooth and start listening for state changes
   Future<void> _initializeBluetooth() async {
     await _bluetoothService.initialize();
-
-    // If Bluetooth is off, show dialog after a short delay (for UX)
-    if (_bluetoothService.connectionState ==
-        InsoleConnectionState.bluetoothOff) {
+    if (_bluetoothService.connectionState == InsoleConnectionState.bluetoothOff) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          showBluetoothOffDialog(context);
-        }
+        if (mounted) showBluetoothOffDialog(context);
       });
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Handle app resume - check permissions and Bluetooth state
     if (state == AppLifecycleState.resumed) {
-      // Recheck permissions in case user granted them in settings
       _bluetoothService.recheckPermissions();
       _bluetoothService.initialize();
     }
@@ -103,100 +94,44 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     super.dispose();
   }
 
-  /// Handle device tap - either connect or start scanning
   Future<void> _onDeviceTap(int index) async {
     final service = context.read<BluetoothService>();
-
-    // Check Bluetooth state first
     if (service.connectionState == InsoleConnectionState.bluetoothOff) {
       showBluetoothOffDialog(context);
       return;
     }
-
-    // If we have discovered devices, connect to the selected one
     if (service.discoveredDevices.isNotEmpty &&
         index < service.discoveredDevices.length) {
-      final device = service.discoveredDevices[index];
       setState(() => selectedDevice = index);
-      await service.connectToDevice(device);
+      await service.connectToDevice(service.discoveredDevices[index]);
     } else {
-      // Start scanning if no devices found yet
       await service.startScanning();
     }
   }
 
-  /// Handle the main "Connect Insole" / "Let's Start" button tap
   Future<void> _onConnectButtonPressed() async {
     final service = context.read<BluetoothService>();
-
-    // Check Bluetooth state first
     if (service.connectionState == InsoleConnectionState.bluetoothOff) {
       showBluetoothOffDialog(context);
       return;
     }
-
-    // If already connected, proceed to next screen
     if (service.isConnected) {
-      final device = service.connectedDevice;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Color(0xFFA3FBFF)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Connected to ${device?.name ?? "Insole"}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: _kTeal,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          elevation: 8,
-        ),
-      );
-      // TODO: Navigate to the next screen (e.g., monitoring dashboard)
+      // TODO: Navigate to monitoring dashboard
       return;
     }
-
-    // If connection failed, show retry dialog
     if (service.connectionState == InsoleConnectionState.failed) {
-      final shouldRetry = await showConnectionFailedDialog(
-        context,
-        service.errorMessage,
-      );
+      final shouldRetry = await showConnectionFailedDialog(context, service.errorMessage);
       if (shouldRetry) {
         service.reset();
         await service.startScanning();
       }
       return;
     }
-
-    // If scanning or connecting, let it continue
-    if (service.isScanning || service.isConnecting) {
-      return;
-    }
-
-    // If we have devices, connect to the selected one
+    if (service.isScanning || service.isConnecting) return;
     if (service.discoveredDevices.isNotEmpty) {
-      final device = service.discoveredDevices[selectedDevice];
-      await service.connectToDevice(device);
+      await service.connectToDevice(service.discoveredDevices[selectedDevice]);
     } else {
-      // Start scanning for devices
       await service.startScanning();
-      
-      // Check if permissions were denied after attempting to scan
       if (service.connectionState == InsoleConnectionState.permissionDenied) {
         if (mounted) showPermissionDeniedDialog(context);
       }
@@ -205,58 +140,41 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Watch BluetoothService for reactive updates
     final bluetoothService = context.watch<BluetoothService>();
-    final mq = MediaQuery.of(context);
-
-    // Get discovered devices or use placeholder list when empty/scanning
     final devices = bluetoothService.discoveredDevices;
-    final bool hasDevices = devices.isNotEmpty;
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // ── Curved teal header ──
-          _buildHeader(mq.size, bluetoothService),
-
-          // ── Bluetooth avatar overlapping header ──
+          _buildHeader(MediaQuery.of(context).size),
           Transform.translate(
             offset: const Offset(0, -75),
             child: Column(
               children: [
                 _buildBluetoothAvatar(bluetoothService),
                 const SizedBox(height: 16),
-                // Status subtitle
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: Text(
-                    bluetoothService.isConnected
-                        ? 'Connected and ready'
-                        : 'Ready to connect',
+                    bluetoothService.isConnected ? 'Connected and ready' : 'Ready to connect',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: AppColors.textSecondary,
-                      height: 1.4,
-                    ),
+                    style: TextStyle(fontSize: 15, color: AppColors.textSecondary, height: 1.4),
                   ),
                 ),
               ],
             ),
           ),
-
-          // ── Devices / empty state ──
           Expanded(
             child: Transform.translate(
               offset: const Offset(0, -50),
-              child: hasDevices
+              child: bluetoothService.isConnected && bluetoothService.connectedDevice != null
+                  ? _buildConnectedDeviceCard(bluetoothService)
+                  : devices.isNotEmpty
                   ? _buildDevicesList(bluetoothService, devices)
                   : _buildEmptyState(bluetoothService),
             ),
           ),
-
-          // ── Bottom button ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
             child: SafeArea(
@@ -265,9 +183,7 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed:
-                      bluetoothService.isScanning ||
-                          bluetoothService.isConnecting
+                  onPressed: bluetoothService.isScanning || bluetoothService.isConnecting
                       ? null
                       : _onConnectButtonPressed,
                   style: ElevatedButton.styleFrom(
@@ -277,14 +193,8 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
                     disabledForegroundColor: Colors.white70,
                     elevation: 4,
                     shadowColor: _kTeal.withOpacity(0.4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.3,
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: 0.3),
                   ),
                   child: _buildButtonContent(bluetoothService),
                 ),
@@ -297,9 +207,7 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     );
   }
 
-  // ── Curved teal header (matches AI Doctor screen) ─────────────────
-
-  Widget _buildHeader(Size size, BluetoothService service) {
+  Widget _buildHeader(Size size) {
     return ClipPath(
       clipper: _CurvedClipper(),
       child: Container(
@@ -338,8 +246,6 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
       ),
     );
   }
-
-  // ── Bluetooth avatar with pulse animation ──────────────────────────
 
   Widget _buildBluetoothAvatar(BluetoothService service) {
     final anim = _pulseAnimation;
@@ -394,11 +300,45 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     );
   }
 
-  /// Build the devices list when devices are discovered
-  Widget _buildDevicesList(
-    BluetoothService service,
-    List<InsoleDevice> devices,
-  ) {
+  Widget _buildConnectedDeviceCard(BluetoothService service) {
+    final device = service.connectedDevice!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kTeal, width: 1.5),
+          boxShadow: [BoxShadow(color: _kTeal.withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: _kTeal.withOpacity(0.12), shape: BoxShape.circle),
+            child: const Icon(Icons.bluetooth_connected_rounded, color: _kTeal, size: 24),
+          ),
+          title: Text(
+            device.name.isNotEmpty ? device.name : 'Unknown Device',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF222222)),
+          ),
+          subtitle: Text(device.id, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+          trailing: TextButton.icon(
+            onPressed: () => service.disconnectDevice(),
+            icon: const Icon(Icons.bluetooth_disabled_rounded, size: 18),
+            label: const Text('Disconnect'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red[400],
+              textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDevicesList(BluetoothService service, List<InsoleDevice> devices) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
       child: ListView.builder(
@@ -407,8 +347,10 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
         itemBuilder: (context, i) {
           final device = devices[i];
           final isSelected = selectedDevice == i;
-          final isConnectedDevice =
-              service.isConnected && service.connectedDevice?.id == device.id;
+          final isConnected = service.isConnected && service.connectedDevice?.id == device.id;
+          final String btnText = isConnected
+              ? 'Connected'
+              : (service.isConnecting && isSelected ? 'Connecting...' : 'Connect');
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -418,56 +360,23 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
                 decoration: BoxDecoration(
-                  color: isConnectedDevice
-                      ? _kTeal
-                      : isSelected
-                      ? _kTeal
-                      : const Color(0xFF4D9DA3).withOpacity(0.7),
+                  color: isConnected || isSelected ? _kTeal : const Color(0xFF4D9DA3).withOpacity(0.7),
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: isSelected || isConnectedDevice
-                      ? [
-                          BoxShadow(
-                            color: _kTeal.withOpacity(0.25),
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
-                          ),
-                        ]
+                  boxShadow: isSelected || isConnected
+                      ? [BoxShadow(color: _kTeal.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 4))]
                       : [],
                 ),
                 child: ListTile(
-                  title: Text(
-                    device.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  subtitle: Text(
-                    device.id,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
+                  title: Text(device.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  subtitle: Text(device.id, style: const TextStyle(color: Colors.white70, fontSize: 13)),
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isConnectedDevice ? _kTeal : Colors.white,
+                      color: isConnected ? _kTeal : Colors.white,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isConnectedDevice ? _kTeal : _kTeal,
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: _kTeal, width: 1.5),
                     ),
-                    child: Text(
-                      _getDeviceButtonText(service, device),
-                      style: TextStyle(
-                        color: isConnectedDevice ? Colors.white : _kTeal,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
+                    child: Text(btnText, style: TextStyle(color: isConnected ? Colors.white : _kTeal, fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ),
               ),
@@ -478,21 +387,6 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     );
   }
 
-  /// Get the button text for each device card
-  String _getDeviceButtonText(BluetoothService service, InsoleDevice device) {
-    if (service.isConnected && service.connectedDevice?.id == device.id) {
-      return 'Connected';
-    }
-    if (service.isConnecting &&
-        service.discoveredDevices.isNotEmpty &&
-        selectedDevice < service.discoveredDevices.length &&
-        service.discoveredDevices[selectedDevice].id == device.id) {
-      return 'Connecting...';
-    }
-    return 'Connect';
-  }
-
-  /// Build empty state when no devices discovered yet
   Widget _buildEmptyState(BluetoothService service) {
     return Center(
       child: Padding(
@@ -503,46 +397,20 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
             if (service.connectionState == InsoleConnectionState.failed) ...[
               Icon(Icons.error_outline, size: 48, color: Colors.orange),
               const SizedBox(height: 16),
-              Text(
-                service.errorMessage,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, color: Colors.orange.shade700),
-              ),
+              Text(service.errorMessage, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.orange.shade700)),
               const SizedBox(height: 20),
               TextButton.icon(
-                onPressed: () {
-                  service.reset();
-                  service.startScanning();
-                },
+                onPressed: () { service.reset(); service.startScanning(); },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Try Again'),
                 style: TextButton.styleFrom(foregroundColor: _kTeal),
               ),
             ] else if (service.isScanning) ...[
-              const SizedBox(
-                width: 40,
-                height: 40,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(_kTeal),
-                ),
-              ),
+              const SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 3, valueColor: AlwaysStoppedAnimation<Color>(_kTeal))),
               const SizedBox(height: 20),
-              Text(
-                'Searching for your insole…',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, color: Colors.grey[500]),
-              ),
+              Text('Searching for your insole…', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey[500])),
             ] else ...[
-              Text(
-                'Tap the button below to\nfind your insole',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey[400],
-                  height: 1.5,
-                ),
-              ),
+              Text('Tap the button below to\nfind your insole', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey[400], height: 1.5)),
             ],
           ],
         ),
@@ -550,126 +418,48 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     );
   }
 
-  /// Build the main button content based on current state
   Widget _buildButtonContent(BluetoothService service) {
-    if (service.isScanning) {
-      return const Row(
+    if (service.isScanning || service.isConnecting) {
+      return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          ),
-          SizedBox(width: 12),
-          Text(
-            'SEARCHING...',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              letterSpacing: 1.1,
-            ),
-          ),
+          const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))),
+          const SizedBox(width: 12),
+          Text(service.isScanning ? 'SEARCHING...' : 'CONNECTING...',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.1)),
         ],
       );
     }
-
-    if (service.isConnecting) {
-      return const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          ),
-          SizedBox(width: 12),
-          Text(
-            'CONNECTING...',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ],
-      );
-    }
-
     if (service.isConnected) {
       return const Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.check_circle, color: Colors.white, size: 20),
           SizedBox(width: 8),
-          Text(
-            "LET'S START!",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              letterSpacing: 1.1,
-            ),
-          ),
+          Text("LET'S START!", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.1)),
         ],
       );
     }
-
     if (service.connectionState == InsoleConnectionState.failed) {
       return const Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.refresh, color: Colors.white, size: 20),
           SizedBox(width: 8),
-          Text(
-            'TRY AGAIN',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              letterSpacing: 1.1,
-            ),
-          ),
+          Text('TRY AGAIN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.1)),
         ],
       );
     }
-
-    // Default state - ready to scan
-    return const Text(
-      "LET'S START!",
-      style: TextStyle(
-        color: Colors.white,
-        fontWeight: FontWeight.bold,
-        fontSize: 16,
-        letterSpacing: 1.1,
-      ),
-    );
+    return const Text("LET'S START!", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.1));
   }
 }
-
-// ═════════════════════════════════════════════════════════════════════
-// Curved header clipper (same style as AI Doctor screen)
-// ═════════════════════════════════════════════════════════════════════
 
 class _CurvedClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     return Path()
       ..lineTo(0, size.height - 50)
-      ..quadraticBezierTo(
-        size.width * 0.5,
-        size.height + 25,
-        size.width,
-        size.height - 50,
-      )
+      ..quadraticBezierTo(size.width * 0.5, size.height + 25, size.width, size.height - 50)
       ..lineTo(size.width, 0)
       ..close();
   }
