@@ -6,6 +6,7 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../app/app_theme.dart';
 import '../../models/image_analysis.dart';
 import '../../models/medical_images.dart';
@@ -1021,12 +1022,36 @@ class AnalysisResultScreen extends StatelessWidget {
 
       final bytes = await pdf.save();
 
-      // Save the PDF to the device so the user has it locally.
-      // Try the public Downloads folder on Android first, fall back to the
-      // app's documents directory on iOS / when Downloads is unavailable.
       final filename =
           'KHOTAA_Report_${analysis.classificationLabel}_${image.uploadedAt.millisecondsSinceEpoch}.pdf';
 
+      // Web: trigger browser download via the system share sheet.
+      if (kIsWeb) {
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 22),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Report downloaded',
+                    style: TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      // Mobile: save the PDF to the device so the user has it locally.
+      // Try the public Downloads folder on Android first, fall back to the
+      // app's documents directory on iOS / when Downloads is unavailable.
       Directory? targetDir;
       if (Platform.isAndroid) {
         targetDir = Directory('/storage/emulated/0/Download');

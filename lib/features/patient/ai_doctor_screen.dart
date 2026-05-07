@@ -419,7 +419,10 @@ class _AiDoctorScreenState extends State<AiDoctorScreen>
           top: 10,
           right: 10,
           child: GestureDetector(
-            onTap: () => setState(() => _image = null),
+            onTap: () => setState(() {
+              _image = null;
+              _imageBytes = null;
+            }),
             child: Container(
               width: 34,
               height: 34,
