@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../sensor_alerts/alert_service.dart';
 import '../../models/alert.dart';
+import '../../services/daily_sensor_summary_service.dart';
 
 class WeeklyReportScreen extends StatefulWidget {
   const WeeklyReportScreen({super.key});
@@ -18,10 +19,7 @@ class WeeklyReportScreen extends StatefulWidget {
 class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   final List<String> _weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // Computed from real AlertService data
-  List<double> _temperatureData = List.filled(7, 0.0);
-  List<double> _pressureData = List.filled(7, 0.0);
-
+  // Alert counts (from AlertService)
   int _temperatureAlerts = 0;
   int _pressureAlerts = 0;
   int _combinedAlerts = 0;
@@ -35,14 +33,18 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   void initState() {
     super.initState();
     _computeWeekBounds();
-    _loadReportData();
-    // Re-render whenever AlertService syncs new data from Firestore
-    AlertService().addListener(_loadReportData);
+    _loadChartData();
+    _loadAlertCounts();
+    // Re-render whenever daily summaries update (live sensor accumulation)
+    DailySensorSummaryService().addListener(_loadChartData);
+    // Re-render whenever alert service syncs new data from Firestore
+    AlertService().addListener(_loadAlertCounts);
   }
 
   @override
   void dispose() {
-    AlertService().removeListener(_loadReportData);
+    DailySensorSummaryService().removeListener(_loadChartData);
+    AlertService().removeListener(_loadAlertCounts);
     super.dispose();
   }
 
@@ -54,30 +56,24 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     _weekEnd = _weekStart.add(const Duration(days: 6));
   }
 
-  void _loadReportData() {
+  /// Trigger rebuild whenever DailySensorSummaryService updates.
+  void _loadChartData() => setState(() {});
+
+  /// Alert breakdown counts — still derived from AlertService.
+  void _loadAlertCounts() {
     final allAlerts = AlertService().alerts;
 
-    // Filter: health alerts within this week only
     final weekAlerts = allAlerts.where((a) {
       return a.notificationType == NotificationType.health &&
           !a.timestamp.isBefore(_weekStart) &&
           a.timestamp.isBefore(_weekEnd.add(const Duration(days: 1)));
     }).toList();
 
-    // Daily accumulators
-    final tempSums = List<double>.filled(7, 0.0);
-    final tempCounts = List<int>.filled(7, 0);
-    final pressureSums = List<double>.filled(7, 0.0);
-    final pressureCounts = List<int>.filled(7, 0);
-
     int tempAlerts = 0;
     int pressureAlerts = 0;
     int combinedAlerts = 0;
 
     for (final alert in weekAlerts) {
-      // weekday in Dart: 1=Mon...7=Sun. We want Sun=0, Mon=1...Sat=6
-      final dayIndex = alert.timestamp.weekday % 7;
-
       switch (alert.category) {
         case RiskCategory.temperature:
           tempAlerts++;
@@ -86,102 +82,65 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
           pressureAlerts++;
           break;
         case RiskCategory.combined:
-          // Combined counts as BOTH temperature and pressure for breakdown
           combinedAlerts++;
           break;
-      }
-
-      // Accumulate real sensor readings from sensorData
-      final sensor = alert.sensorData;
-      if (sensor != null) {
-        final t = (sensor['temperatureValue'] as num?)?.toDouble();
-        final p = (sensor['pressureValue'] as num?)?.toDouble();
-        if (t != null && t > 0) {
-          tempSums[dayIndex] += t;
-          tempCounts[dayIndex]++;
-        }
-        if (p != null && p > 0) {
-          pressureSums[dayIndex] += p;
-          pressureCounts[dayIndex]++;
-        }
       }
     }
 
     setState(() {
-      // Daily average — 0.0 means no reading for that day
-      _temperatureData = List.generate(
-        7, (i) => tempCounts[i] > 0 ? tempSums[i] / tempCounts[i] : 0.0);
-      _pressureData = List.generate(
-        7, (i) => pressureCounts[i] > 0 ? pressureSums[i] / pressureCounts[i] : 0.0);
       _temperatureAlerts = tempAlerts;
       _pressureAlerts = pressureAlerts;
       _combinedAlerts = combinedAlerts;
     });
   }
 
-  // ── Summary metrics ──
+  // ── Summary getters ──────────────────────────────────────────────────────
 
-  double get _avgTemperature {
-    final nonZero = _temperatureData.where((v) => v > 0).toList();
-    if (nonZero.isEmpty) return 0.0;
-    return nonZero.reduce((a, b) => a + b) / nonZero.length;
-  }
+  DailySensorSummaryService get _svc => DailySensorSummaryService();
 
-  String get _highestRiskDay {
-    // Day with highest average temperature reading (most inflammation risk)
-    int maxIndex = -1;
-    double maxValue = 0.0;
-    for (int i = 0; i < _temperatureData.length; i++) {
-      if (_temperatureData[i] > maxValue) {
-        maxValue = _temperatureData[i];
-        maxIndex = i;
-      }
-    }
-    return maxIndex >= 0 ? _weekDays[maxIndex] : '-';
-  }
+  double get _peakAsymmetryThisWeek => _svc.weeklyPeakAsymmetry;
+  double get _peakPressureThisWeek  => _svc.weeklyPeakPressureKpa;
 
-  /// Total health alerts this week (combined counts once)
   int get _totalAlerts => _temperatureAlerts + _pressureAlerts + _combinedAlerts;
 
+  String get _highestRiskDay {
+    final levels = _svc.weekDailyRiskLevels;
+    int maxIdx = -1;
+    int maxVal = 0;
+    for (int i = 0; i < levels.length; i++) {
+      if (levels[i] > maxVal) { maxVal = levels[i]; maxIdx = i; }
+    }
+    return maxIdx >= 0 ? _weekDays[maxIdx] : '-';
+  }
+
   String get _overallRiskStatus {
-    if (_combinedAlerts > 0 || _totalAlerts > 8) return 'High';
-    if (_totalAlerts > 4) return 'Medium';
-    if (_totalAlerts > 0) return 'Low';
+    final p = _peakPressureThisWeek;
+    final a = _peakAsymmetryThisWeek;
+    if ((p >= 200.0 && a >= 2.2) || _combinedAlerts > 0 || _totalAlerts > 8) return 'High';
+    if (p >= 200.0 || a >= 2.2 || _totalAlerts > 4) return 'Medium';
+    if (_totalAlerts > 0 || p > 0 || a > 0) return 'Low';
     return 'Normal';
   }
 
   Color get _overallRiskColor {
     switch (_overallRiskStatus) {
-      case 'High':
-        return const Color(0xFFE53935);
-      case 'Medium':
-        return const Color(0xFFFFA726);
-      case 'Low':
-        return const Color(0xFF4CAF50);
-      default:
-        return const Color(0xFF4CAF50);
+      case 'High':   return const Color(0xFFE53935);
+      case 'Medium': return const Color(0xFFFFA726);
+      case 'Low':    return const Color(0xFF4CAF50);
+      default:       return const Color(0xFF4CAF50);
     }
   }
 
-  // Dynamic chart bounds based on real data
-  double get _tempMin {
-    final nonZero = _temperatureData.where((v) => v > 0);
-    return nonZero.isEmpty ? 28.0 : (nonZero.reduce(min) - 2).floorToDouble();
+  Color _asymmetryColor(double v) {
+    if (v >= 2.2) return const Color(0xFFE53935); // expert system threshold
+    if (v >  0)   return const Color(0xFF4CAF50);
+    return Colors.grey;
   }
 
-  double get _tempMax {
-    final nonZero = _temperatureData.where((v) => v > 0);
-    return nonZero.isEmpty ? 38.0 : (nonZero.reduce(max) + 2).ceilToDouble();
-  }
-
-  double get _pressureMin {
-    final nonZero = _pressureData.where((v) => v > 0);
-    return nonZero.isEmpty ? 50.0 : (nonZero.reduce(min) - 20).floorToDouble().clamp(0, double.infinity);
-  }
-
-  double get _pressureMax {
-    final nonZero = _pressureData.where((v) => v > 0);
-    return nonZero.isEmpty ? 250.0 : (nonZero.reduce(max) + 20).ceilToDouble();
+  Color _pressureColor(double kpa) {
+    if (kpa >= 200.0) return const Color(0xFFE53935); // expert system threshold
+    if (kpa >  0)     return const Color(0xFF4CAF50);
+    return Colors.grey;
   }
 
   @override
@@ -199,9 +158,9 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
             const SizedBox(height: 20),
             _buildSummaryCard(),
             const SizedBox(height: 24),
-            _buildTemperatureChart(),
+            _buildDailyRiskCalendar(),
             const SizedBox(height: 24),
-            _buildPressureChart(),
+            _buildRegionRiskTable(),
             const SizedBox(height: 24),
             _buildRiskBreakdown(),
             const SizedBox(height: 24),
@@ -341,9 +300,11 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
               Expanded(
                 child: _buildSummaryItem(
                   icon: Icons.thermostat_rounded,
-                  label: 'Avg Temperature',
-                  value: '${_avgTemperature.toStringAsFixed(1)}°C',
-                  color: _getTempColor(_avgTemperature),
+                  label: 'Peak Asymmetry',
+                  value: _peakAsymmetryThisWeek > 0
+                      ? '${_peakAsymmetryThisWeek.toStringAsFixed(1)}°C'
+                      : '--',
+                  color: _asymmetryColor(_peakAsymmetryThisWeek),
                 ),
               ),
               const SizedBox(width: 16),
@@ -424,92 +385,232 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     );
   }
 
-  Widget _buildTemperatureChart() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+  // ── 7-Day Risk Calendar ────────────────────────────────────────────────────
+  // Each day = a colored box: grey=no data · green=normal · orange=moderate · red=high
+  // The patient and doctor can see at a glance which days had risk events.
+
+  Widget _buildDailyRiskCalendar() {
+    final riskLevels = _svc.weekDailyRiskLevels;
+    final today      = DateTime.now().weekday % 7; // Sun=0…Sat=6
+
+    Color boxColor(int level) {
+      switch (level) {
+        case 3:  return const Color(0xFFE53935);
+        case 2:  return const Color(0xFFFFA726);
+        case 1:  return const Color(0xFF4CAF50);
+        default: return const Color(0xFFE8ECEF);
+      }
+    }
+
+    String boxLabel(int level) {
+      switch (level) {
+        case 3:  return 'High';
+        case 2:  return 'Moderate';
+        case 1:  return 'OK';
+        default: return '–';
+      }
+    }
+
+    return _cardWrap(
+      title: 'Daily Risk Overview',
+      icon: Icons.calendar_month_rounded,
+      iconColor: const Color(0xFF64ADB3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
+        children: List.generate(7, (i) {
+          final level   = riskLevels[i];
+          final color   = boxColor(level);
+          final isToday = i == today;
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    height: 56,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF7043).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
+                      color: color.withOpacity(level == 0 ? 0.4 : 0.85),
+                      borderRadius: BorderRadius.circular(12),
+                      border: isToday
+                          ? Border.all(color: const Color(0xFF1A1A2E), width: 2)
+                          : null,
                     ),
-                    child: const Icon(
-                      Icons.thermostat_rounded,
-                      color: Color(0xFFFF7043),
-                      size: 22,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            boxLabel(level),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: level == 0 ? Colors.grey[500] : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Temperature Trend',
+                  const SizedBox(height: 6),
+                  Text(
+                    _weekDays[i],
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A2E),
+                      fontSize: 11,
+                      fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
+                      color: isToday
+                          ? const Color(0xFF1A1A2E)
+                          : const Color(0xFF6B7280),
                     ),
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  '7 Days',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 180,
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: _SimpleChartPainter(
-                data: _temperatureData,
-                labels: _weekDays,
-                lineColor: const Color(0xFFFF7043),
-                minValue: _tempMin,
-                maxValue: _tempMax,
-                unit: '°C',
-              ),
             ),
+          );
+        }),
+          ),
+          const SizedBox(height: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _legendDot(const Color(0xFF4CAF50), 'Normal – pressure & temperature both within range'),
+              const SizedBox(height: 5),
+              _legendDot(const Color(0xFFFFA726), 'Moderate – high pressure OR high temperature'),
+              const SizedBox(height: 5),
+              _legendDot(const Color(0xFFE53935), 'High – both pressure & temperature elevated'),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPressureChart() {
+  // ── Region Risk Table ──────────────────────────────────────────────────────
+  // 8 anatomical rows × (Left kPa | Right kPa | Asymmetry °C)
+  // Color coded against IWGDF thresholds. Exactly what a podiatrist needs.
+
+  Widget _buildRegionRiskTable() {
+    final leftP   = _svc.weeklyLeftPeakPressure;
+    final rightP  = _svc.weeklyRightPeakPressure;
+    final asymm   = _svc.weeklyPeakAsymmetryPerRegion;
+
+    final hasAnyData = leftP.any((v) => v > 0) ||
+        rightP.any((v) => v > 0) ||
+        asymm.any((v) => v > 0);
+
+    Widget headerCell(String text, {Color? color}) => Expanded(
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: color ?? const Color(0xFF6B7280),
+        ),
+      ),
+    );
+
+    Widget valueCell(double val, Color color, String suffix) => Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: val > 0 ? color.withOpacity(0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: val > 0
+              ? Border.all(color: color.withOpacity(0.3), width: 1)
+              : null,
+        ),
+        child: Text(
+          val > 0 ? '${val.toStringAsFixed(0)}$suffix' : '–',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: val > 0 ? color : Colors.grey[400],
+          ),
+        ),
+      ),
+    );
+
+    return _cardWrap(
+      title: 'Highest Readings This Week by Region',
+      icon: Icons.grid_view_rounded,
+      iconColor: const Color(0xFF5C6BC0),
+      child: Column(
+        children: [
+          // Threshold legend
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _legendDot(const Color(0xFF4CAF50), 'Normal'),
+                const SizedBox(width: 12),
+                _legendDot(const Color(0xFFE53935), 'High pressure ≥200 kPa or\nasymmetry ≥2.2°C'),
+              ],
+            ),
+          ),
+          // Header row
+          Row(
+            children: [
+              const SizedBox(width: 60),
+              headerCell('Left Pressure\n(kPa)',  color: const Color(0xFF5C6BC0)),
+              headerCell('Right Pressure\n(kPa)', color: const Color(0xFF42A5F5)),
+              headerCell('Asymmetry\n(°C)',        color: const Color(0xFFFF7043)),
+            ],
+          ),
+          const Divider(height: 8),
+          if (!hasAnyData)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No insole data this week yet',
+                  style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                ),
+              ),
+            )
+          else
+            ...List.generate(8, (r) {
+              final lp = leftP[r];
+              final rp = rightP[r];
+              final as_ = asymm[r];
+              return Row(
+                children: [
+                  SizedBox(
+                    width: 60,
+                    child: Text(
+                      kRegionLabels[r],
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A2E),
+                      ),
+                    ),
+                  ),
+                  valueCell(lp,  _pressureColor(lp),  ' kPa'),
+                  valueCell(rp,  _pressureColor(rp),  ' kPa'),
+                  valueCell(as_, _asymmetryColor(as_), '°C'),
+                ],
+              );
+            }),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  // ── Shared card wrapper ────────────────────────────────────────────────────
+
+  Widget _cardWrap({
+    required String title,
+    required IconData icon,
+    required Color iconColor,
+    required Widget child,
+  }) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -527,72 +628,46 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5C6BC0).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.compress_rounded,
-                      color: Color(0xFF5C6BC0),
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Pressure Trend',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                  ),
-                ],
-              ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
-                  borderRadius: BorderRadius.circular(8),
+                  color: iconColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Text(
-                  '7 Days',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6B7280),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A2E),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 180,
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: _SimpleChartPainter(
-                data: _pressureData,
-                labels: _weekDays,
-                lineColor: const Color(0xFF5C6BC0),
-                minValue: _pressureMin,
-                maxValue: _pressureMax,
-                unit: 'kPa',
-              ),
-            ),
-          ),
+          const SizedBox(height: 20),
+          child,
         ],
       ),
     );
   }
+
+  Widget _legendDot(Color color, String label) => Row(
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 4),
+      Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+    ],
+  );
 
   Widget _buildRiskBreakdown() {
     return Container(
@@ -871,8 +946,8 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       _buildPdfMetric(
-                        'Avg Temperature',
-                        '${_avgTemperature.toStringAsFixed(1)}°C',
+                        'Peak Pressure',
+                        '${_peakPressureThisWeek.toStringAsFixed(0)} kPa',
                       ),
                       _buildPdfMetric('Total Alerts', '$_totalAlerts'),
                       _buildPdfMetric('Overall Risk', _overallRiskStatus),
@@ -884,9 +959,9 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
             ),
             pw.SizedBox(height: 24),
 
-            // Temperature Data Table
+            // Per-Region Peak Pressure & Asymmetry Table
             pw.Text(
-              'Temperature Trend (°C)',
+              'Peak Values by Region (This Week)',
               style: pw.TextStyle(
                 fontSize: 16,
                 fontWeight: pw.FontWeight.bold,
@@ -902,33 +977,23 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
               headerDecoration: const pw.BoxDecoration(color: PdfColors.teal),
               cellAlignment: pw.Alignment.center,
               cellHeight: 30,
-              headers: _weekDays,
-              data: [
-                _temperatureData.map((t) => t.toStringAsFixed(1)).toList(),
-              ],
+              headers: ['Region', 'Left (kPa)', 'Right (kPa)', 'Asymmetry (°C)'],
+              data: List.generate(8, (r) {
+                final lp = _svc.weeklyLeftPeakPressure[r];
+                final rp = _svc.weeklyRightPeakPressure[r];
+                final as_ = _svc.weeklyPeakAsymmetryPerRegion[r];
+                return [
+                  kRegionLabels[r],
+                  lp > 0 ? lp.toStringAsFixed(0) : '–',
+                  rp > 0 ? rp.toStringAsFixed(0) : '–',
+                  as_ > 0 ? as_.toStringAsFixed(1) : '–',
+                ];
+              }),
             ),
-            pw.SizedBox(height: 24),
-
-            // Pressure Data Table
+            pw.SizedBox(height: 8),
             pw.Text(
-              'Pressure Trend (kPa)',
-              style: pw.TextStyle(
-                fontSize: 16,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.teal800,
-              ),
-            ),
-            pw.SizedBox(height: 12),
-            pw.Table.fromTextArray(
-              headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.white,
-              ),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.teal),
-              cellAlignment: pw.Alignment.center,
-              cellHeight: 30,
-              headers: _weekDays,
-              data: [_pressureData.map((p) => p.toStringAsFixed(1)).toList()],
+              'IWGDF 2023: Risk threshold ≥ 200 kPa · ≥ 2.2°C asymmetry',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
             ),
             pw.SizedBox(height: 24),
 
@@ -1011,7 +1076,8 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('PDF generation error: $e\n$stack');
       setState(() => _isDownloading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1080,12 +1146,6 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     );
   }
 
-  Color _getTempColor(double temp) {
-    if (temp > 34.0) return const Color(0xFFE53935);
-    if (temp > 33.0) return const Color(0xFFFFA726);
-    return const Color(0xFF4CAF50);
-  }
-
   String _formatDate(DateTime date) {
     final months = [
       'Jan',
@@ -1105,233 +1165,3 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   }
 }
 
-/// Simple and clear chart painter
-class _SimpleChartPainter extends CustomPainter {
-  final List<double> data;
-  final List<String> labels;
-  final Color lineColor;
-  final double minValue;
-  final double maxValue;
-  final String unit;
-
-  _SimpleChartPainter({
-    required this.data,
-    required this.labels,
-    required this.lineColor,
-    required this.minValue,
-    required this.maxValue,
-    required this.unit,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final width = size.width;
-    final height = size.height;
-    const double topPad    = 30;   // space for value labels above dots
-    const double bottomPad = 40;   // space for X-axis labels
-    const double leftPad   = 50;   // space for Y-axis labels
-    final double chartH    = height - topPad - bottomPad;
-    final double chartW    = width  - leftPad;
-    final double range     = (maxValue - minValue).clamp(0.001, double.infinity);
-
-    // ── coordinate helpers ──────────────────────────────────────────
-    double toY(double v) =>
-        topPad + chartH - ((v - minValue) / range) * chartH;
-    double toX(int i)    =>
-        leftPad + i * (chartW / (data.length - 1));
-
-    // ── trend color per segment ──────────────────────────────────────
-    // Rising  → red   (higher pressure / temperature = worse)
-    // Falling → green (getting better)
-    // Stable  → lineColor
-    Color trendColor(double from, double to) {
-      final pct = (to - from) / from;
-      if (pct > 0.03)  return const Color(0xFFE53935); // ↑ worse
-      if (pct < -0.03) return const Color(0xFF43A047); // ↓ better
-      return lineColor;                                 // → stable
-    }
-
-    // ── 1. Grid lines ────────────────────────────────────────────────
-    final gridPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.15)
-      ..strokeWidth = 1;
-    for (int i = 0; i <= 4; i++) {
-      final y = topPad + (chartH / 4) * i;
-      canvas.drawLine(Offset(leftPad, y), Offset(width, y), gridPaint);
-    }
-
-    // ── 2. Y-axis labels ─────────────────────────────────────────────
-    final yStep = range / 4;
-    for (int i = 0; i <= 4; i++) {
-      final value = maxValue - yStep * i;
-      final y     = topPad + (chartH / 4) * i;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: value.toStringAsFixed(0),
-          style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.w500),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(leftPad - tp.width - 4, y - tp.height / 2));
-    }
-
-    // ── 3. X-axis labels + empty-day markers ────────────────────────
-    for (int i = 0; i < labels.length; i++) {
-      final hasData = data[i] > 0;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: labels[i],
-          style: TextStyle(
-            color: hasData ? Colors.grey[700] : Colors.grey[400],
-            fontSize: 12,
-            fontWeight: hasData ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(toX(i) - tp.width / 2, topPad + chartH + 10));
-
-      if (!hasData) {
-        // hollow circle at mid-chart height for empty days
-        final emptyY = topPad + chartH * 0.5;
-        canvas.drawCircle(
-          Offset(toX(i), emptyY), 4,
-          Paint()
-            ..color = Colors.grey[300]!
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
-        );
-        final dash = TextPainter(
-          text: TextSpan(
-            text: 'No data',
-            style: TextStyle(color: Colors.grey[400], fontSize: 9),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        dash.paint(canvas, Offset(toX(i) - dash.width / 2, emptyY - 16));
-      }
-    }
-
-    // ── 4. Collect non-zero points (preserving x position = day slot) ─
-    final nonZeroEntries = <MapEntry<int, double>>[];
-    for (int i = 0; i < data.length; i++) {
-      if (data[i] > 0) nonZeroEntries.add(MapEntry(i, data[i]));
-    }
-
-    if (nonZeroEntries.isEmpty) return;
-
-    final pts = nonZeroEntries
-        .map((e) => Offset(toX(e.key), toY(e.value)))
-        .toList();
-
-    // ── 5. Colored trend segments ────────────────────────────────────
-    for (int i = 0; i < pts.length - 1; i++) {
-      final fromVal = nonZeroEntries[i].value;
-      final toVal   = nonZeroEntries[i + 1].value;
-      final segColor = trendColor(fromVal, toVal);
-
-      // Smooth bezier between consecutive non-zero points
-      final p1 = pts[i];
-      final p2 = pts[i + 1];
-      final cpX = (p1.dx + p2.dx) / 2;
-      final segPath = Path()
-        ..moveTo(p1.dx, p1.dy)
-        ..cubicTo(cpX, p1.dy, cpX, p2.dy, p2.dx, p2.dy);
-
-      canvas.drawPath(
-        segPath,
-        Paint()
-          ..color = segColor
-          ..strokeWidth = 3
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round,
-      );
-
-      // Subtle area fill under segment
-      final areaPath = Path()
-        ..moveTo(p1.dx, p1.dy)
-        ..cubicTo(cpX, p1.dy, cpX, p2.dy, p2.dx, p2.dy)
-        ..lineTo(p2.dx, topPad + chartH)
-        ..lineTo(p1.dx, topPad + chartH)
-        ..close();
-      canvas.drawPath(
-        areaPath,
-        Paint()
-          ..color = segColor.withOpacity(0.10),
-      );
-
-      // Mid-segment trend arrow label
-      final midX = (p1.dx + p2.dx) / 2;
-      final midY = (p1.dy + p2.dy) / 2 - 14;
-      final arrow = toVal > fromVal * 1.03 ? '↑'
-                  : toVal < fromVal * 0.97 ? '↓'
-                  : '→';
-      final arrowTp = TextPainter(
-        text: TextSpan(
-          text: arrow,
-          style: TextStyle(color: segColor, fontSize: 13, fontWeight: FontWeight.bold),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      arrowTp.paint(canvas, Offset(midX - arrowTp.width / 2, midY.clamp(topPad, topPad + chartH - 14)));
-    }
-
-    // ── 6. Dots + value labels on each non-zero point ────────────────
-    for (int i = 0; i < pts.length; i++) {
-      final pt  = pts[i];
-      final val = nonZeroEntries[i].value;
-
-      // Dot
-      canvas.drawCircle(pt, 9,  Paint()..color = lineColor.withOpacity(0.18));
-      canvas.drawCircle(pt, 5,  Paint()..color = Colors.white);
-      canvas.drawCircle(pt, 4,  Paint()..color = lineColor);
-
-      // Value label above dot — always inside bounds
-      final valTp = TextPainter(
-        text: TextSpan(
-          text: val.toStringAsFixed(1),
-          style: TextStyle(color: lineColor, fontSize: 11, fontWeight: FontWeight.bold),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final labelY = (pt.dy - 22).clamp(2.0, topPad + chartH - valTp.height - 2);
-      valTp.paint(canvas, Offset(pt.dx - valTp.width / 2, labelY));
-    }
-
-    // ── 7. Overall trend badge (top-right corner) ────────────────────
-    if (nonZeroEntries.length >= 2) {
-      final first = nonZeroEntries.first.value;
-      final last  = nonZeroEntries.last.value;
-      final pct   = (last - first) / first;
-      final badgeText = pct >  0.03 ? '↑ Rising'
-                      : pct < -0.03 ? '↓ Improving'
-                      : '→ Stable';
-      final badgeColor = pct >  0.03 ? const Color(0xFFE53935)
-                       : pct < -0.03 ? const Color(0xFF43A047)
-                       : Colors.grey[600]!;
-
-      final badgeTp = TextPainter(
-        text: TextSpan(
-          text: badgeText,
-          style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.w700),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      final badgeRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          width - badgeTp.width - 18,
-          2,
-          badgeTp.width + 14,
-          badgeTp.height + 8,
-        ),
-        const Radius.circular(20),
-      );
-      canvas.drawRRect(badgeRect, Paint()..color = badgeColor.withOpacity(0.12));
-      badgeTp.paint(canvas, Offset(width - badgeTp.width - 11, 6));
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

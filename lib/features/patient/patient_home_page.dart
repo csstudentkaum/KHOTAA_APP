@@ -8,6 +8,7 @@ import 'booking/my_bookings_screen.dart';
 import 'my_treatment_plans_screen.dart';
 import 'patient_shell.dart';
 import '../sensor_alerts/alert_service.dart';
+import '../../services/daily_sensor_summary_service.dart';
 import '../../services/consultation_service.dart';
 import '../../services/notification_service.dart';
 import '../../models/consultation.dart';
@@ -84,6 +85,7 @@ class _PatientHomePageState extends State<PatientHomePage>
         return;
       }
       await AlertService().initialize(user.uid);
+      await DailySensorSummaryService().initialize(user.uid);
     } catch (e) {
       debugPrint('Error initializing alert service: $e');
     }
