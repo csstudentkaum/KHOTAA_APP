@@ -55,6 +55,11 @@ class _ConsultationSessionScreenState extends State<ConsultationSessionScreen> {
   String? _recordingPath;
   int _recordingSeconds = 0;
   Timer? _recordingTimer;
+  // Voice note preview state (after recording stops, before sending)
+  bool _isRecordingPaused = false;
+  String? _pausedRecordingPath;
+  int _pausedRecordingSeconds = 0;
+  bool _isPlayingPreview = false;
   StreamSubscription<List<ChatMessage>>? _messagesSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   String? _previousStatus;
@@ -187,24 +192,12 @@ class _ConsultationSessionScreenState extends State<ConsultationSessionScreen> {
       if (savedPath == null) return;
       final file = File(savedPath);
       if (!file.existsSync()) return;
-      setState(() => _isSending = true);
-      try {
-        // Use the timer seconds — more reliable than estimating from file size
-        final duration = savedSeconds.clamp(1, 600);
-        await _service.sendVoice(widget.consultationId, file, duration);
-        _scrollToBottom();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Voice upload failed: $e'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
-      } finally {
-        setState(() => _isSending = false);
-      }
+      // Go to preview state — user must confirm send or delete
+      setState(() {
+        _isRecordingPaused = true;
+        _pausedRecordingPath = savedPath;
+        _pausedRecordingSeconds = savedSeconds;
+      });
     } else {
       final hasPermission = await _recorder.hasPermission();
       if (!hasPermission) {
@@ -232,6 +225,74 @@ class _ConsultationSessionScreenState extends State<ConsultationSessionScreen> {
       _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         setState(() => _recordingSeconds++);
       });
+    }
+  }
+
+  Future<void> _cancelPausedVoice() async {
+    await _player.stop();
+    final path = _pausedRecordingPath;
+    setState(() {
+      _isRecordingPaused = false;
+      _pausedRecordingPath = null;
+      _pausedRecordingSeconds = 0;
+      _isPlayingPreview = false;
+    });
+    if (path != null) {
+      final file = File(path);
+      if (file.existsSync()) file.deleteSync();
+    }
+  }
+
+  Future<void> _sendPausedVoice() async {
+    await _player.stop();
+    final path = _pausedRecordingPath;
+    final seconds = _pausedRecordingSeconds;
+    setState(() {
+      _isRecordingPaused = false;
+      _pausedRecordingPath = null;
+      _pausedRecordingSeconds = 0;
+      _isPlayingPreview = false;
+      _isSending = true;
+    });
+    if (path == null) return;
+    final file = File(path);
+    if (!file.existsSync()) {
+      setState(() => _isSending = false);
+      return;
+    }
+    try {
+      final duration = seconds.clamp(1, 600);
+      await _service.sendVoice(widget.consultationId, file, duration);
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Voice upload failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _toggleVoicePreview() async {
+    if (_pausedRecordingPath == null) return;
+    if (_isPlayingPreview) {
+      await _player.stop();
+      setState(() => _isPlayingPreview = false);
+    } else {
+      setState(() => _isPlayingPreview = true);
+      try {
+        await _player.play(DeviceFileSource(_pausedRecordingPath!));
+        _player.onPlayerComplete.listen((_) {
+          if (mounted) setState(() => _isPlayingPreview = false);
+        });
+      } catch (_) {
+        setState(() => _isPlayingPreview = false);
+      }
     }
   }
 
@@ -856,12 +917,18 @@ class _ConsultationSessionScreenState extends State<ConsultationSessionScreen> {
                 _InputBar(
                   controller: _textController,
                   isRecording: _isRecording,
+                  isRecordingPaused: _isRecordingPaused,
                   isSending: _isSending,
                   recordingSeconds: _recordingSeconds,
+                  pausedSeconds: _pausedRecordingSeconds,
+                  isPlayingPreview: _isPlayingPreview,
                   onSendText: _sendText,
                   onPickImage: _pickImage,
                   onPickFile: _pickFile,
                   onToggleRecording: _toggleRecording,
+                  onCancelPausedVoice: _cancelPausedVoice,
+                  onSendPausedVoice: _sendPausedVoice,
+                  onToggleVoicePreview: _toggleVoicePreview,
                 ),
               if (isReadOnly)
                 _ReadOnlyBanner(consultationId: widget.consultationId),
@@ -1209,35 +1276,136 @@ class _ReadOnlyBanner extends StatelessWidget {
 class _InputBar extends StatelessWidget {
   final TextEditingController controller;
   final bool isRecording;
+  final bool isRecordingPaused;
   final bool isSending;
   final int recordingSeconds;
+  final int pausedSeconds;
+  final bool isPlayingPreview;
   final VoidCallback onSendText;
   final VoidCallback onPickImage;
   final VoidCallback onPickFile;
   final VoidCallback onToggleRecording;
+  final VoidCallback onCancelPausedVoice;
+  final VoidCallback onSendPausedVoice;
+  final VoidCallback onToggleVoicePreview;
 
   const _InputBar({
     required this.controller,
     required this.isRecording,
+    required this.isRecordingPaused,
     required this.isSending,
     required this.recordingSeconds,
+    required this.pausedSeconds,
+    required this.isPlayingPreview,
     required this.onSendText,
     required this.onPickImage,
     required this.onPickFile,
     required this.onToggleRecording,
+    required this.onCancelPausedVoice,
+    required this.onSendPausedVoice,
+    required this.onToggleVoicePreview,
   });
 
   @override
   Widget build(BuildContext context) {
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final safeBottom = MediaQuery.of(context).padding.bottom;
+
+    final bottomPad = keyboardHeight > 0 ? 8.0 : safeBottom + 8.0;
+
+    // ── Voice preview (paused) state — WhatsApp style ──────────────────────
+    if (isRecordingPaused) {
+      return Container(
+        color: const Color(0xFFF0F2F5),
+        padding: EdgeInsets.only(
+          left: 8,
+          right: 8,
+          top: 8,
+          bottom: bottomPad,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Delete button
+            _CircleButton(
+              icon: Icons.delete_outline_rounded,
+              onPressed: isSending ? null : onCancelPausedVoice,
+              color: const Color(0xFFEF4444),
+            ),
+            const SizedBox(width: 8),
+            // Preview pill
+            Expanded(
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 6),
+                    // Play / pause preview button
+                    GestureDetector(
+                      onTap: onToggleVoicePreview,
+                      child: Icon(
+                        isPlayingPreview
+                            ? Icons.pause_circle_filled_rounded
+                            : Icons.play_circle_filled_rounded,
+                        color: AppColors.primary,
+                        size: 34,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Waveform bars
+                    Expanded(
+                      child: _VoiceWaveform(
+                        isPlaying: isPlayingPreview,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Duration
+                    Text(
+                      _formatRecording(pausedSeconds),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Send button
+            _CircleButton(
+              icon: Icons.send_rounded,
+              onPressed: isSending ? null : onSendPausedVoice,
+              color: AppColors.primary,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Normal input bar ────────────────────────────────────────────────────
     return Container(
       color: const Color(0xFFF0F2F5),
       padding: EdgeInsets.only(
         left: 8,
         right: 8,
         top: 8,
-        bottom: keyboardHeight > 0 ? 8 : safeBottom + 8,
+        bottom: bottomPad,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -1299,7 +1467,7 @@ class _InputBar extends StatelessWidget {
                                 const SizedBox(width: 6),
                                 const Expanded(
                                   child: Text(
-                                    'Slide to cancel',
+                                    'Recording…',
                                     style: TextStyle(
                                       color: AppColors.textHint,
                                       fontSize: 12,
@@ -1370,14 +1538,14 @@ class _InputBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // ── Send button (outside pill) — only when typing or recording ──
+          // ── Send / stop button (outside pill) ──
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: controller,
             builder: (context, value, child) {
               final hasText = value.text.trim().isNotEmpty;
               if (!hasText && !isRecording) return const SizedBox.shrink();
               return _CircleButton(
-                icon: isRecording ? Icons.send_rounded : Icons.send_rounded,
+                icon: Icons.send_rounded,
                 onPressed: isSending
                     ? null
                     : (isRecording ? onToggleRecording : onSendText),
@@ -1460,6 +1628,47 @@ class _InputBar extends StatelessWidget {
     );
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Decorative static waveform shown in the voice preview pill.
+class _VoiceWaveform extends StatelessWidget {
+  final bool isPlaying;
+  final Color color;
+
+  const _VoiceWaveform({required this.isPlaying, required this.color});
+
+  static const _heights = [10.0, 18.0, 12.0, 22.0, 14.0, 24.0, 16.0, 20.0,
+                            12.0, 18.0, 10.0, 22.0, 14.0, 16.0, 24.0, 12.0,
+                            20.0, 18.0, 14.0, 10.0];
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final barCount = (_heights.length).clamp(0, _heights.length);
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: List.generate(barCount, (i) {
+            return Container(
+              width: 3,
+              height: _heights[i % _heights.length],
+              decoration: BoxDecoration(
+                color: isPlaying
+                    ? color
+                    : color.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 class _CircleButton extends StatelessWidget {
   final IconData icon;
