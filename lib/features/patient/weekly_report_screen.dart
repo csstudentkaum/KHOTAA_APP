@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:math';
 import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../sensor_alerts/alert_service.dart';
@@ -1043,38 +1045,59 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
         ),
       );
 
-      // Save PDF to device
-      final directory = await getApplicationDocumentsDirectory();
+      final pdfBytes = await pdf.save();
       final fileName =
           'KHOTAA_Weekly_Report_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(await pdf.save());
 
-      setState(() => _isDownloading = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(child: Text('Report saved successfully!')),
-              ],
+      if (kIsWeb) {
+        // Web: trigger browser download
+        await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+        setState(() => _isDownloading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('Report downloaded!')),
+                ],
+              ),
+              backgroundColor: const Color(0xFF4CAF50),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 3),
             ),
-            backgroundColor: const Color(0xFF4CAF50),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+          );
+        }
+      } else {
+        // Mobile: save to documents folder and offer open
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('\${directory.path}/$fileName');
+        await file.writeAsBytes(pdfBytes);
+        setState(() => _isDownloading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('Report saved successfully!')),
+                ],
+              ),
+              backgroundColor: const Color(0xFF4CAF50),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Open',
+                textColor: Colors.white,
+                onPressed: () => OpenFile.open(file.path),
+              ),
             ),
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Open',
-              textColor: Colors.white,
-              onPressed: () => OpenFile.open(file.path),
-            ),
-          ),
-        );
+          );
+        }
       }
     } catch (e, stack) {
       debugPrint('PDF generation error: $e\n$stack');

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../../app/app_theme.dart';
 import '../../services/bluetooth_service.dart';
+import '../../services/web_bluetooth_service.dart';
 import '../../state/bluetooth_provider.dart';
 
 // ── Figma palette (same as AI Doctor screen) ────────────────────────
@@ -41,6 +43,10 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
 
   /// Flag to track if we've initialized
   bool _initialized = false;
+
+  /// Web Bluetooth state
+  bool _webScanning = false;
+  WebBluetoothDevice? _webConnectedDevice;
 
   /// Pulse animation (same as AI Doctor screen)
   AnimationController? _pulseController;
@@ -125,8 +131,85 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     }
   }
 
+  /// Web Bluetooth connection flow
+  Future<void> _onConnectWeb() async {
+    // Already connected — do nothing (disconnect button handles this)
+    if (_webConnectedDevice != null) return;
+
+    if (!WebBluetoothService.isSupported) {
+      _showSnackBar(
+        'Web Bluetooth is not supported in this browser.\nPlease use Chrome or Edge.',
+        success: false,
+      );
+      return;
+    }
+
+    setState(() => _webScanning = true);
+
+    try {
+      final device = await WebBluetoothService.requestDevice();
+
+      if (device == null) {
+        setState(() => _webScanning = false);
+        return;
+      }
+
+      _showSnackBar('Connecting to ${device.name}…', success: true);
+
+      final connected = await WebBluetoothService.connectGatt(device);
+
+      setState(() {
+        _webScanning = false;
+        _webConnectedDevice = connected ? device : null;
+      });
+
+      if (connected) {
+        _showSnackBar('Connected to ${device.name}!', success: true);
+      } else {
+        _showSnackBar('Failed to connect. Please try again.', success: false);
+      }
+    } catch (e) {
+      setState(() => _webScanning = false);
+      _showSnackBar('Error: $e', success: false);
+    }
+  }
+
+  void _disconnectWeb() {
+    setState(() => _webConnectedDevice = null);
+    _showSnackBar('Disconnected', success: false);
+  }
+
+  void _showSnackBar(String message, {required bool success}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              success ? Icons.check_circle : Icons.error_outline,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: success ? _kTeal : Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   /// Handle the main "Connect Insole" / "Let's Start" button tap
   Future<void> _onConnectButtonPressed() async {
+    // ── Web path ──────────────────────────────────────────────────────────
+    if (kIsWeb) {
+      await _onConnectWeb();
+      return;
+    }
+
+    // ── Mobile path (unchanged) ───────────────────────────────────────────
     final service = context.read<BluetoothService>();
 
     // Check Bluetooth state first
@@ -209,6 +292,11 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
     final bluetoothService = context.watch<BluetoothService>();
     final mq = MediaQuery.of(context);
 
+    // Web: show connected device or empty state
+    if (kIsWeb) {
+      return _buildWebLayout(mq.size);
+    }
+
     // Get discovered devices or use placeholder list when empty/scanning
     final devices = bluetoothService.discoveredDevices;
     final bool hasDevices = devices.isNotEmpty;
@@ -288,6 +376,235 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
                   ),
                   child: _buildButtonContent(bluetoothService),
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  // ── Web layout ────────────────────────────────────────────────────────────
+
+  Widget _buildWebLayout(Size size) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // header
+          ClipPath(
+            clipper: _CurvedClipper(),
+            child: Container(
+              height: size.height * 0.28,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_kTeal, Color(0xFF4D9DA3)],
+                ),
+              ),
+              child: const SafeArea(
+                bottom: false,
+                child: Center(
+                  child: Text(
+                    'Connect Insole',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // avatar
+          Transform.translate(
+            offset: const Offset(0, -75),
+            child: Column(
+              children: [
+                Container(
+                  width: 150,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFA3FBFF), Color(0xFF629699)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFA3FBFF).withOpacity(0.3),
+                        blurRadius: 24,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [_kDarkBlue, Color(0xFF2F4A5F)],
+                        ),
+                      ),
+                      child: Icon(
+                        _webConnectedDevice != null
+                            ? Icons.bluetooth_connected_rounded
+                            : Icons.bluetooth_rounded,
+                        size: 65,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _webConnectedDevice != null
+                      ? 'Connected and ready'
+                      : _webScanning
+                          ? 'Searching…'
+                          : 'Ready to connect',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: _webConnectedDevice != null
+                        ? _kTeal
+                        : Colors.grey[500],
+                  ),
+                ),
+                // ── Connected device card ──
+                if (_webConnectedDevice != null) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: _kTeal.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _kTeal.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: _kTeal.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.bluetooth_connected_rounded,
+                            color: _kTeal,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _webConnectedDevice!.name,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1A1A2E),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _webConnectedDevice!.id,
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey[500]),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Disconnect button
+                        TextButton.icon(
+                          onPressed: _disconnectWeb,
+                          icon: const Icon(Icons.link_off_rounded, size: 16),
+                          label: const Text('Disconnect'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red.shade400,
+                            textStyle: const TextStyle(fontSize: 13),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (!WebBluetoothService.isSupported) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 40),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Colors.orange.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Web Bluetooth requires Chrome or Edge browser.',
+                            style: TextStyle(
+                                color: Colors.orange.shade700, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const Spacer(),
+          // button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+            child: SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: _webScanning ? null : _onConnectButtonPressed,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kTeal,
+                  disabledBackgroundColor: _kTeal.withOpacity(0.35),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w600),
+                ),
+                child: _webScanning
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text('SEARCHING…'),
+                        ],
+                      )
+                    : Text(_webConnectedDevice != null
+                        ? "LET'S START!"
+                        : 'CONNECT INSOLE'),
               ),
             ),
           ),
