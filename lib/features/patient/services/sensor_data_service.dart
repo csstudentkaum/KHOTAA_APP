@@ -148,7 +148,9 @@ class SensorDataService extends ChangeNotifier {
   /// Called every time the ESP32 pushes a new window to Firebase (~5 s).
   /// Updates left foot arrays; expert system picks them up on the next timer tick.
   void _onInsoleData(InsoleSnapshot snap) {
-    _lastInsoleUpdate = DateTime.now();
+    // Use the ESP32 / Firebase server timestamp (not phone clock) so a cached
+    // ghost snapshot replayed on app start cannot be mistaken for a fresh push.
+    _lastInsoleUpdate = snap.serverTime;
     // Normalize kPa → 0–1 for heatmap display.
     // _checkForAbnormalReadings multiplies back by 300 to get kPa.
     _leftFootPressure =

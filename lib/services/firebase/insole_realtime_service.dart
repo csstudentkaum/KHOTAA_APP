@@ -12,11 +12,15 @@ import 'package:flutter/material.dart';
 class InsoleSnapshot {
   final List<double> pressureKpa;
   final List<double> temperatureC;
+  /// Wall-clock time when the ESP32 wrote this window (Firebase ServerValue.TIMESTAMP).
+  final DateTime serverTime;
+  /// Time the phone parsed the snapshot.
   final DateTime receivedAt;
 
   const InsoleSnapshot({
     required this.pressureKpa,
     required this.temperatureC,
+    required this.serverTime,
     required this.receivedAt,
   });
 }
@@ -40,6 +44,11 @@ class InsoleRealtimeService {
   StreamSubscription<DatabaseEvent>? _subscription;
   final StreamController<InsoleSnapshot> _controller =
       StreamController<InsoleSnapshot>.broadcast();
+
+  /// Snapshots older than this (compared to phone clock) are discarded.
+  /// Protects against the cached 'ghost' value Firebase replays the first
+  /// time we attach `onValue` after the ESP32 has gone offline.
+  static const Duration kMaxSnapshotAge = Duration(seconds: 15);
 
   /// Latest snapshot received — null until first Firebase push arrives.
   InsoleSnapshot? _latest;
@@ -77,6 +86,23 @@ class InsoleRealtimeService {
 
         try {
           final map = Map<String, dynamic>.from(raw as Map);
+
+          // ── Server timestamp (epoch ms, set by Firebase via {.sv:'timestamp'}) ──
+          final tsRaw = map['timestamp'];
+          final int? tsMs = tsRaw is num ? tsRaw.toInt() : null;
+          if (tsMs == null) {
+            debugPrint(
+                'InsoleRealtimeService: no timestamp — discarding cached snapshot');
+            return;
+          }
+          final serverTime = DateTime.fromMillisecondsSinceEpoch(tsMs);
+          final age = DateTime.now().difference(serverTime);
+          if (age > kMaxSnapshotAge) {
+            debugPrint(
+                'InsoleRealtimeService: stale snapshot (${age.inSeconds}s old) — discarding');
+            return;
+          }
+
           final pressureRaw =
               Map<String, dynamic>.from(map['pressure'] as Map);
           final tempRaw =
@@ -93,6 +119,7 @@ class InsoleRealtimeService {
           final snap = InsoleSnapshot(
             pressureKpa: pressures,
             temperatureC: temps,
+            serverTime: serverTime,
             receivedAt: DateTime.now(),
           );
 
@@ -100,7 +127,7 @@ class InsoleRealtimeService {
           _controller.add(snap);
 
           debugPrint(
-            'InsoleRealtimeService: received window — '
+            'InsoleRealtimeService: received window (age ${age.inSeconds}s) — '
             'peak ${pressures.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)} kPa  '
             'hot ${temps.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)}°C',
           );
