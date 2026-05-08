@@ -39,12 +39,14 @@ void main() async {
     // must fall back to reCAPTCHA. Setting appVerificationDisabledForTesting
     // to true in DEBUG mode bypasses both APNs and reCAPTCHA so phone
     // verification works on the simulator with Firebase test phone numbers.
-    if (kDebugMode) {
+    // NOTE: Do NOT set this on web — web requires real reCAPTCHA to send
+    // OTPs to real phone numbers. Only apply on mobile/desktop.
+    if (kDebugMode && !kIsWeb) {
       await FirebaseAuth.instance.setSettings(
         appVerificationDisabledForTesting: true,
       );
       debugPrint(
-        '⚠️  Phone auth verification disabled for testing (debug mode)',
+        '⚠️  Phone auth verification disabled for testing (debug mode, non-web)',
       );
     }
 

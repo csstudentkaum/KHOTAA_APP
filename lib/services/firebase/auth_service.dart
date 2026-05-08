@@ -29,6 +29,10 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // Web-only: stores the result from signInWithPhoneNumber so verifyOTP can confirm it.
+  // Static so it survives navigation between screens (each screen creates a new AuthService instance).
+  static ConfirmationResult? _webConfirmationResult;
+
   // ==================== AUTH STATE ====================
 
   User? get currentUser => _auth.currentUser;
@@ -48,11 +52,33 @@ class AuthService {
     Function(PhoneAuthCredential credential)? onAutoVerified,
     int? forceResendingToken,
   }) async {
-    // Ensure app verification is disabled for testing on simulator
-    // This MUST be set right before verifyPhoneNumber to avoid race conditions
+    if (kIsWeb) {
+      // ── Web flow ──────────────────────────────────────────────────────────
+      // Firebase web phone auth requires signInWithPhoneNumber + RecaptchaVerifier.
+      // verifyPhoneNumber() is mobile-only and throws invalid-app-credential on web.
+      try {
+        // signInWithPhoneNumber creates an invisible RecaptchaVerifier
+        // internally when no verifier is passed, avoiding direct use of
+        // RecaptchaVerifier (which requires FirebaseAuthPlatform, a private
+        // internal type not accessible from outside firebase_auth).
+        _webConfirmationResult = await _auth.signInWithPhoneNumber(phoneNumber);
+        debugPrint('OTP sent to $phoneNumber (web)');
+        onCodeSent(_webConfirmationResult!.verificationId, null);
+      } on FirebaseAuthException catch (e) {
+        debugPrint('Web OTP send failed: ${e.code} - ${e.message}');
+        onError(getErrorMessage(e.code));
+      } catch (e) {
+        debugPrint('Web OTP send error: $e');
+        onError('Something went wrong. Please try again.');
+      }
+      return;
+    }
+
+    // ── Mobile flow ───────────────────────────────────────────────────────
+    // Ensure app verification is disabled for testing on simulator (mobile only).
     if (kDebugMode) {
       await _auth.setSettings(appVerificationDisabledForTesting: true);
-      debugPrint('  appVerificationDisabledForTesting set to true before OTP');
+      debugPrint('  appVerificationDisabledForTesting set to true before OTP (mobile)');
     }
 
     await _auth.verifyPhoneNumber(
@@ -84,6 +110,20 @@ class AuthService {
     required String verificationId,
     required String otp,
   }) async {
+    if (kIsWeb) {
+      // Web: confirm the code against the ConfirmationResult stored by sendOTP.
+      if (_webConfirmationResult == null) {
+        throw FirebaseAuthException(
+          code: 'session-expired',
+          message: 'No active OTP session. Please request a new code.',
+        );
+      }
+      final result = await _webConfirmationResult!.confirm(otp);
+      _webConfirmationResult = null; // clear after use
+      return result;
+    }
+
+    // Mobile: use the verificationId returned by verifyPhoneNumber.
     final credential = PhoneAuthProvider.credential(
       verificationId: verificationId,
       smsCode: otp,
