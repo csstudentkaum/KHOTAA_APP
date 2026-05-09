@@ -23,6 +23,16 @@ class SensorDataService extends ChangeNotifier {
   static const double kRightFootIdleTempC = 31.0;
   static const double kRightFootIdlePressureNorm = 0.0;
 
+  // ── Demo alert cycle ─────────────────────────────────────────────────────
+  // Fires a two-phase alert scenario every 2 hours (for demos / testing).
+  //   Phase 1 (T+30 s):   Pressure-only → moderate notification.
+  //   Phase 2 (T+5 min):  Pressure + temperature → high-risk alert.
+  // Set kEnableDemoAlerts = false in production once real bilateral insole is ready.
+  static const bool kEnableDemoAlerts = true;
+  static const Duration _demoInitialDelay = Duration(seconds: 30);
+  static const Duration _demoPhase2Delay  = Duration(seconds: 90); // 30 s + 90 s = 2 min total
+  static const Duration _demoCyclePeriod  = Duration(hours: 2);
+
   static final SensorDataService _instance = SensorDataService._internal();
   factory SensorDataService() => _instance;
   SensorDataService._internal();
@@ -35,6 +45,13 @@ class SensorDataService extends ChangeNotifier {
   StreamSubscription<InsoleSnapshot>? _insoleSubscription;
   bool _isMonitoring = false;
   BuildContext? _dialogContext;
+
+  // Demo cycle state
+  Timer? _demoTimer;
+  DateTime? _lastDemoCycleStart;
+  int _demoPhase = 0; // 0=idle · 1=pressure only · 2=combined pressure+temp
+  bool _demoPhase1Fired = false; // one-shot: notification sent for phase 1
+  bool _demoPhase2Fired = false; // one-shot: alert sent for phase 2
 
   // Current sensor readings
   double _temperature = 32.5;
@@ -132,6 +149,9 @@ class SensorDataService extends ChangeNotifier {
       notifyListeners();
     });
 
+    // Demo alert cycle
+    if (kEnableDemoAlerts) _scheduleDemoPhase1(initial: true);
+
     debugPrint('📡 Sensor monitoring started (left=ESP32, right=simulated)');
   }
 
@@ -139,8 +159,10 @@ class SensorDataService extends ChangeNotifier {
   void stopMonitoring() {
     _sensorTimer?.cancel();
     _livenessTimer?.cancel();
+    _demoTimer?.cancel();
     _insoleSubscription?.cancel();
     _insoleService.stop();
+    _demoPhase = 0;
     _isMonitoring = false;
     debugPrint('📡 Sensor monitoring stopped');
   }
@@ -148,6 +170,13 @@ class SensorDataService extends ChangeNotifier {
   /// Called every time the ESP32 pushes a new window to Firebase (~5 s).
   /// Updates left foot arrays; expert system picks them up on the next timer tick.
   void _onInsoleData(InsoleSnapshot snap) {
+    // In demo mode the timer controls all sensor data — ignore real ESP32 readings
+    // to prevent 372 kPa / 36 °C from triggering alerts outside the demo cycle.
+    if (kEnableDemoAlerts) {
+      debugPrint('📡 ESP32 data suppressed (demo mode active)');
+      return;
+    }
+
     // Use the ESP32 / Firebase server timestamp (not phone clock) so a cached
     // ghost snapshot replayed on app start cannot be mistaken for a fresh push.
     _lastInsoleUpdate = snap.serverTime;
@@ -190,6 +219,53 @@ class SensorDataService extends ChangeNotifier {
       for (int i = 0; i < 8; i++) {
         _rightFootPressure[i] = (0.1 + random.nextDouble() * 0.5).clamp(0.0, 1.0);
         _rightFootTemp[i] = 25.5 + random.nextDouble() * 1.0;
+      }
+    }
+
+    // ── Demo mode: fully controls all sensor state ─────────────────────────────
+    if (kEnableDemoAlerts) {
+      switch (_demoPhase) {
+        case 0:
+          // Normal/healthy state — no expert system, dashboard stays green.
+          _leftFootPressure  = [0.18, 0.20, 0.19, 0.18, 0.20, 0.15, 0.10, 0.13];
+          _leftFootTemp      = [29.8, 29.6, 29.7, 29.6, 29.8, 29.0, 29.5, 29.3];
+          _rightFootPressure = [0.18, 0.20, 0.19, 0.18, 0.20, 0.15, 0.10, 0.13];
+          _rightFootTemp     = List.filled(8, kRightFootIdleTempC);
+          _lastInsoleUpdate  = DateTime.now(); // keep daily-summary running
+          _leftPressureWindow.clear();
+          _rightPressureWindow.clear();
+          _tempAlertStreak   = 0;
+          if (_hasAbnormalReading) {
+            _hasAbnormalReading = false;
+            _abnormalType = '';
+            _lastResult   = null;
+          }
+          notifyListeners();
+          return; // skip expert system entirely
+        case 1:
+          // High pressure, normal temps → fire ONE moderate notification then idle
+          if (_demoPhase1Fired) {
+            // Notification already sent — keep dashboard showing orange but skip expert system
+            notifyListeners();
+            return;
+          }
+          _leftFootPressure  = [0.84, 0.26, 0.25, 0.23, 0.24, 0.16, 0.11, 0.15];
+          _leftFootTemp      = [30.2, 29.6, 29.7, 29.5, 29.6, 28.0, 29.1, 28.5];
+          _rightFootTemp     = List.filled(8, kRightFootIdleTempC);
+          _rightFootPressure = List.filled(8, kRightFootIdlePressureNorm);
+          _lastInsoleUpdate  = DateTime.now();
+        case 2:
+          // High pressure + temp asymmetry — fire ONE high-risk alert then idle
+          if (_demoPhase2Fired) {
+            // Alert already sent — keep dashboard showing red but skip expert system
+            notifyListeners();
+            return;
+          }
+          _leftFootPressure  = [0.84, 0.26, 0.25, 0.23, 0.24, 0.16, 0.11, 0.15];
+          _leftFootTemp      = [34.2, 33.6, 33.4, 33.1, 33.3, 31.5, 32.7, 32.1];
+          _rightFootTemp     = List.filled(8, kRightFootIdleTempC);
+          _rightFootPressure = List.filled(8, kRightFootIdlePressureNorm);
+          _lastInsoleUpdate  = DateTime.now();
       }
     }
 
@@ -310,14 +386,85 @@ class SensorDataService extends ChangeNotifier {
           _abnormalType = 'both';
         }
 
-        // Trigger alert/notification
+        // Trigger alert/notification — one-shot in demo mode
         await _notificationService.handleExpertResult(result);
+        if (kEnableDemoAlerts) {
+          if (_demoPhase == 1) _demoPhase1Fired = true;
+          if (_demoPhase == 2) _demoPhase2Fired = true;
+        }
       } else {
         _abnormalType = '';
       }
     } catch (e) {
       debugPrint('Expert system error: $e');
     }
+  }
+
+  // ── Demo alert cycle helpers ──────────────────────────────────────────────
+
+  /// Schedule Phase 1. [initial]=true uses a short warm-up delay (30 s),
+  /// otherwise waits out the remainder of the 2-hour cooldown.
+  void _scheduleDemoPhase1({bool initial = false}) {
+    _demoTimer?.cancel();
+    Duration delay;
+    if (initial) {
+      delay = _demoInitialDelay;
+    } else if (_lastDemoCycleStart != null) {
+      final remaining = _demoCyclePeriod - DateTime.now().difference(_lastDemoCycleStart!);
+      delay = remaining.isNegative ? Duration.zero : remaining;
+    } else {
+      delay = _demoInitialDelay;
+    }
+    _demoTimer = Timer(delay, _runDemoPhase1);
+    debugPrint('🔵 Demo: Phase 1 scheduled in ${delay.inSeconds}s');
+  }
+
+  /// Phase 1 — inject high-pressure, normal-temperature data.
+  /// The expert system will fire a MODERATE pressure-only notification.
+  void _runDemoPhase1() {
+    if (!_isMonitoring) return;
+    _lastDemoCycleStart = DateTime.now();
+    _demoPhase = 1;
+    _demoPhase1Fired = false;
+    _lastInsoleUpdate = DateTime.now();
+    _leftPressureWindow.clear();
+    _tempAlertStreak = 0;
+    notifyListeners();
+    debugPrint('🔵 Demo Phase 1 active: pressure=${(0.84 * 300).toStringAsFixed(0)} kPa, no temp asymmetry');
+
+    _demoTimer = Timer(_demoPhase2Delay, _runDemoPhase2);
+  }
+
+  /// Phase 2 — add temperature asymmetry (~3.2 °C) on top of the high pressure.
+  /// The expert system will fire a HIGH-RISK combined alert after 5 consecutive ticks.
+  /// After 60 s the dashboard resets to Normal and the 2-hour cycle countdown begins.
+  void _runDemoPhase2() {
+    if (!_isMonitoring) return;
+    _demoPhase = 2;
+    _demoPhase2Fired = false;
+    _lastInsoleUpdate = DateTime.now();
+    _tempAlertStreak = 0;
+    notifyListeners();
+    debugPrint('🔴 Demo Phase 2 active: combined pressure+temp (asymmetry ≈3.2 °C)');
+
+    // After 60 s reset to Normal; next cycle in 2 hours.
+    _demoTimer = Timer(const Duration(seconds: 60), () {
+      _demoPhase          = 0;
+      _demoPhase1Fired    = false;
+      _demoPhase2Fired    = false;
+      _hasAbnormalReading = false;
+      _abnormalType       = '';
+      _lastResult         = null;
+      _leftPressureWindow.clear();
+      _rightPressureWindow.clear();
+      _tempAlertStreak    = 0;
+      notifyListeners();
+      debugPrint('✅ Demo: returned to Normal — next cycle in ~${(_demoCyclePeriod.inMinutes - 2).round()} min');
+
+      const spent = Duration(seconds: 30 + 90 + 60);
+      final remaining = _demoCyclePeriod - spent;
+      _demoTimer = Timer(remaining, () => _scheduleDemoPhase1());
+    });
   }
 
   /// Map pressure array index to anatomical sensor region

@@ -29,8 +29,8 @@ class SensorAlertHandler {
   // Cooldown management to prevent alert fatigue
   DateTime? _lastAlertTime;
   DateTime? _lastNotificationTime;
-  static const Duration _alertCooldown = Duration(minutes: 5);
-  static const Duration _notificationCooldown = Duration(minutes: 10);
+  static const Duration _alertCooldown        = Duration(hours: 2);
+  static const Duration _notificationCooldown = Duration(hours: 2);
 
   // Context for showing dialogs (set from dashboard)
   BuildContext? _dialogContext;

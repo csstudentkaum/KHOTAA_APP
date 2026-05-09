@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -114,7 +115,7 @@ class LocalNotificationService {
       fullScreenIntent: isRiskAlert,
       playSound: false, // sound played separately via AudioPlayer to avoid double sound
       enableVibration: true,
-      vibrationPattern: isRiskAlert ? Int64List.fromList([0, 500, 200, 500]) : null,
+      vibrationPattern: (isRiskAlert && !kIsWeb) ? Int64List.fromList([0, 500, 200, 500]) : null,
       enableLights: true,
       ledColor: const Color(0xFFE53935),
       ledOnMs: 1000,

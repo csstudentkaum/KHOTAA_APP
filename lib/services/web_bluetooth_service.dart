@@ -33,6 +33,21 @@ class WebBluetoothService {
     }
   }
 
+  /// Returns true when running on iOS (iPhone/iPad/iPod).
+  /// On iOS, Apple forces all browsers to use WebKit, which blocks the
+  /// Web Bluetooth API entirely — even in Chrome or Edge.
+  /// The user must install the native KHOTAA app to use Bluetooth.
+  static bool get isIOSDevice {
+    try {
+      final ua = js.context['navigator']['userAgent']?.toString() ?? '';
+      return ua.contains('iPhone') ||
+          ua.contains('iPad') ||
+          ua.contains('iPod');
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Opens the browser's device picker dialog.
   /// Returns the selected device or null if user cancels / not supported.
   static Future<WebBluetoothDevice?> requestDevice() async {

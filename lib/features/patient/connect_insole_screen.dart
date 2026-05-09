@@ -89,6 +89,13 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
 
   Future<void> _onConnectWeb() async {
     if (_webConnectedDevice != null) return;
+    if (WebBluetoothService.isIOSDevice) {
+      _showSnackBar(
+        'Bluetooth is not supported in browsers on iOS.\nPlease install the KHOTAA native app.',
+        success: false,
+      );
+      return;
+    }
     if (!WebBluetoothService.isSupported) {
       _showSnackBar('Web Bluetooth is not supported in this browser.\nPlease use Chrome or Edge.', success: false);
       return;
@@ -319,7 +326,31 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
                     ),
                   ),
                 ],
-                if (!WebBluetoothService.isSupported) ...[
+                if (WebBluetoothService.isIOSDevice) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 40),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.smartphone_rounded, color: Colors.red.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Bluetooth is not supported in browsers on iOS.\nPlease install the KHOTAA native app to use the sensor features.',
+                            style: TextStyle(color: Colors.red.shade700, fontSize: 13, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (!WebBluetoothService.isSupported) ...[
                   const SizedBox(height: 12),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 40),
@@ -353,7 +384,7 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
               width: double.infinity,
               height: 54,
               child: ElevatedButton(
-                onPressed: _webScanning ? null : _onConnectButtonPressed,
+                  onPressed: (_webScanning || WebBluetoothService.isIOSDevice) ? null : _onConnectButtonPressed,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _kTeal,
                   disabledBackgroundColor: _kTeal.withValues(alpha: 0.35),
