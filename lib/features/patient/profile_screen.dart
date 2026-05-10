@@ -8,6 +8,7 @@ import 'edit_profile_screen.dart';
 import 'favourite_doctors_screen.dart';
 import 'help_support_screen.dart';
 import 'medical_info_screen.dart';
+import 'services/sensor_data_service.dart';
 import 'patient_shell.dart';
 
 /// Patient profile screen
@@ -70,6 +71,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirm == true) {
+      SensorDataService().stopMonitoring();
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);

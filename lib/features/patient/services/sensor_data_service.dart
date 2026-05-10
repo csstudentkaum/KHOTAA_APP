@@ -26,11 +26,11 @@ class SensorDataService extends ChangeNotifier {
   // ── Demo alert cycle ─────────────────────────────────────────────────────
   // Fires a two-phase alert scenario every 2 hours (for demos / testing).
   //   Phase 1 (T+30 s):   Pressure-only → moderate notification.
-  //   Phase 2 (T+5 min):  Pressure + temperature → high-risk alert.
+  //   Phase 2 (T+1:30):   Pressure + temperature → high-risk alert.
   // Set kEnableDemoAlerts = false in production once real bilateral insole is ready.
   static const bool kEnableDemoAlerts = true;
   static const Duration _demoInitialDelay = Duration(seconds: 30);
-  static const Duration _demoPhase2Delay  = Duration(seconds: 90); // 30 s + 90 s = 2 min total
+  static const Duration _demoPhase2Delay  = Duration(minutes: 1); // 30 s + 60 s = 90 s total
   static const Duration _demoCyclePeriod  = Duration(hours: 2);
 
   static final SensorDataService _instance = SensorDataService._internal();
@@ -157,12 +157,17 @@ class SensorDataService extends ChangeNotifier {
 
   /// Stop monitoring
   void stopMonitoring() {
+    debugPrint('📡 stopMonitoring() called from:\n${StackTrace.current}');
     _sensorTimer?.cancel();
     _livenessTimer?.cancel();
     _demoTimer?.cancel();
     _insoleSubscription?.cancel();
     _insoleService.stop();
     _demoPhase = 0;
+    _demoPhase1Fired = false;
+    _demoPhase2Fired = false;
+    _lastDemoCycleStart = null;
+    _lastInsoleUpdate = null;
     _isMonitoring = false;
     debugPrint('📡 Sensor monitoring stopped');
   }
@@ -390,7 +395,9 @@ class SensorDataService extends ChangeNotifier {
         await _notificationService.handleExpertResult(result);
         if (kEnableDemoAlerts) {
           if (_demoPhase == 1) _demoPhase1Fired = true;
-          if (_demoPhase == 2) _demoPhase2Fired = true;
+          // Phase 2: only mark fired when COMBINED risk (both) actually processed
+          // — not on pressure-only ticks while temp streak is still building.
+          if (_demoPhase == 2 && _abnormalType == 'both') _demoPhase2Fired = true;
         }
       } else {
         _abnormalType = '';
@@ -403,18 +410,10 @@ class SensorDataService extends ChangeNotifier {
   // ── Demo alert cycle helpers ──────────────────────────────────────────────
 
   /// Schedule Phase 1. [initial]=true uses a short warm-up delay (30 s),
-  /// otherwise waits out the remainder of the 2-hour cooldown.
+  /// otherwise waits a full 2-hour cool-down in Normal mode.
   void _scheduleDemoPhase1({bool initial = false}) {
     _demoTimer?.cancel();
-    Duration delay;
-    if (initial) {
-      delay = _demoInitialDelay;
-    } else if (_lastDemoCycleStart != null) {
-      final remaining = _demoCyclePeriod - DateTime.now().difference(_lastDemoCycleStart!);
-      delay = remaining.isNegative ? Duration.zero : remaining;
-    } else {
-      delay = _demoInitialDelay;
-    }
+    final Duration delay = initial ? _demoInitialDelay : _demoCyclePeriod;
     _demoTimer = Timer(delay, _runDemoPhase1);
     debugPrint('🔵 Demo: Phase 1 scheduled in ${delay.inSeconds}s');
   }
@@ -437,17 +436,20 @@ class SensorDataService extends ChangeNotifier {
 
   /// Phase 2 — add temperature asymmetry (~3.2 °C) on top of the high pressure.
   /// The expert system will fire a HIGH-RISK combined alert after 5 consecutive ticks.
-  /// After 60 s the dashboard resets to Normal and the 2-hour cycle countdown begins.
+  /// After 60 s the dashboard resets to Normal and sleeps for 2 hours.
   void _runDemoPhase2() {
     if (!_isMonitoring) return;
     _demoPhase = 2;
     _demoPhase2Fired = false;
     _lastInsoleUpdate = DateTime.now();
-    _tempAlertStreak = 0;
+    _tempAlertStreak = _tempStreakRequired; // pre-fill streak so combined fires immediately
     notifyListeners();
     debugPrint('🔴 Demo Phase 2 active: combined pressure+temp (asymmetry ≈3.2 °C)');
+    // Clear only the alert-dialog cooldown so the next tick fires the dialog
+    // immediately (streak is pre-filled → combined risk on first tick).
+    _notificationService.resetAlertCooldownOnly();
 
-    // After 60 s reset to Normal; next cycle in 2 hours.
+    // After 60 s reset to Normal, then sleep for 2 hours.
     _demoTimer = Timer(const Duration(seconds: 60), () {
       _demoPhase          = 0;
       _demoPhase1Fired    = false;
@@ -459,11 +461,9 @@ class SensorDataService extends ChangeNotifier {
       _rightPressureWindow.clear();
       _tempAlertStreak    = 0;
       notifyListeners();
-      debugPrint('✅ Demo: returned to Normal — next cycle in ~${(_demoCyclePeriod.inMinutes - 2).round()} min');
+      debugPrint('✅ Demo: returned to Normal — sleeping for ${_demoCyclePeriod.inHours} hours');
 
-      const spent = Duration(seconds: 30 + 90 + 60);
-      final remaining = _demoCyclePeriod - spent;
-      _demoTimer = Timer(remaining, () => _scheduleDemoPhase1());
+      _scheduleDemoPhase1();
     });
   }
 

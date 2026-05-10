@@ -17,8 +17,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Shared sensor data service
   final SensorDataService _sensorService = SensorDataService();
 
-  // Connection status — driven by real ESP32 liveness (15 s stale window)
-  bool get _isConnected => _sensorService.isLeftFootLive;
+  // In demo mode keep dashboard status active even without real BLE/insole link.
+  bool get _isConnected =>
+      SensorDataService.kEnableDemoAlerts ? _sensorService.isMonitoring : _sensorService.isLeftFootLive;
 
   // Animation controllers
   late AnimationController _pulseController;
@@ -470,7 +471,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildStatusIndicator() {
     // When the insole is offline, never show a stale Normal/Moderate/High
     // verdict — medical-device practice is to display a neutral waiting state.
-    final bool live = _sensorService.isLeftFootLive;
+    final bool live = SensorDataService.kEnableDemoAlerts || _sensorService.isLeftFootLive;
     final vis = _severityVisuals();
     final Color statusColor = live ? vis.color : Colors.grey;
     final String statusLabel = !live ? 'Waiting for Data' : vis.label;
@@ -537,6 +538,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildFootVisualization() {
+    final bool isOffline =
+        SensorDataService.kEnableDemoAlerts ? false : !_sensorService.isLeftFootLive;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -607,13 +611,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               _buildSimpleFoot(
                 label: 'Left Foot',
                 pressureValues: _sensorService.leftFootPressure,
-                isOffline: !_sensorService.isLeftFootLive,
+                isOffline: isOffline,
                 reflectExpertSystem: true,
               ),
               _buildSimpleFoot(
                 label: 'Right Foot',
                 pressureValues: _sensorService.rightFootPressure,
-                isOffline: !_sensorService.isLeftFootLive,
+                isOffline: isOffline,
                 reflectExpertSystem: false,
               ),
             ],

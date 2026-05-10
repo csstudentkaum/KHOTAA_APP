@@ -90,7 +90,7 @@ class SensorAlertHandler {
     }
   }
 
-  /// CASE 2: MODERATE RISK → Push notification
+  /// CASE 2: MODERATE RISK → Push notification + in-app banner
   Future<void> _handleModerateRiskNotification(ExpertSystemResult result) async {
     if (_lastNotificationTime != null &&
         DateTime.now().difference(_lastNotificationTime!) <
@@ -122,13 +122,40 @@ class SensorAlertHandler {
 
     await _saveAlertToService(result, isHighRisk: false);
 
+    // Show OS notification (works on mobile/desktop; on web Chrome it plays sound only)
     await _localNotificationService.show(
       title: title,
       body: body,
       type: type,
     );
 
+    // Show in-app overlay banner so user sees it even when tab is focused
+    _showInAppBanner(title, body, isHighRisk: false);
+
     debugPrint('📱 Moderate risk notification sent: $title');
+  }
+
+  /// Show a sliding banner overlay inside the app (works on web Chrome too).
+  void _showInAppBanner(String title, String body, {bool isHighRisk = false}) {
+    final ctx = _dialogContext;
+    if (ctx == null || !ctx.mounted) return;
+
+    OverlayEntry? entry;
+    entry = OverlayEntry(
+      builder: (_) => _InAppBanner(
+        title: title,
+        body: body,
+        isHighRisk: isHighRisk,
+        onDismiss: () {
+          try { entry?.remove(); } catch (_) {}
+        },
+      ),
+    );
+
+    Overlay.of(ctx).insert(entry);
+    Future.delayed(const Duration(seconds: 5), () {
+      try { entry?.remove(); } catch (_) {}
+    });
   }
 
   /// CASE 3: HIGH RISK + app in background → high-priority push notification
@@ -231,10 +258,16 @@ class SensorAlertHandler {
     }
   }
 
-  /// Reset cooldowns (for testing)
+  /// Reset both cooldowns (for testing)
   void resetCooldowns() {
     _lastAlertTime = null;
     _lastNotificationTime = null;
+  }
+
+  /// Reset only the alert-dialog cooldown so Phase 2 dialog can fire
+  /// without sending a duplicate moderate notification.
+  void resetAlertCooldownOnly() {
+    _lastAlertTime = null;
   }
 
   bool canShowAlert() {
@@ -246,6 +279,130 @@ class SensorAlertHandler {
     if (_lastNotificationTime == null) return true;
     return DateTime.now().difference(_lastNotificationTime!) >=
         _notificationCooldown;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// In-App Sliding Banner (MODERATE RISK - visible even on web Chrome)
+// ────────────────────────────────────────────────────────────────────────────
+
+class _InAppBanner extends StatefulWidget {
+  final String title;
+  final String body;
+  final bool isHighRisk;
+  final VoidCallback onDismiss;
+
+  const _InAppBanner({
+    required this.title,
+    required this.body,
+    required this.isHighRisk,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_InAppBanner> createState() => _InAppBannerState();
+}
+
+class _InAppBannerState extends State<_InAppBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.isHighRisk
+        ? const Color(0xFFE53935)
+        : const Color(0xFFF57C00);
+
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 8,
+      left: 12,
+      right: 12,
+      child: SlideTransition(
+        position: _slide,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  widget.isHighRisk
+                      ? Icons.warning_rounded
+                      : Icons.compress_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.body,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                  onPressed: widget.onDismiss,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

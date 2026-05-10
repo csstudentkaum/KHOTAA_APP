@@ -74,7 +74,10 @@ class PatientShellState extends State<PatientShell> {
   @override
   void dispose() {
     _notificationTapSub?.cancel();
-    _sensorService.stopMonitoring();
+    // Don't stop monitoring here — SensorDataService is a singleton that
+    // outlives PatientShell. Stopping it on every dispose (e.g. Chrome
+    // re-renders) kills the demo cycle. Monitoring is stopped explicitly
+    // on logout via profile screen.
     _sensorService.clearDialogContext();
     super.dispose();
   }

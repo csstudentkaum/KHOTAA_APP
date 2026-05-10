@@ -85,12 +85,6 @@ void main() async {
       _navigateToLatestAlert(initialMessage.data['type'] as String?);
     }
 
-    // Handle local notification taps (risk alerts sent while app was in background)
-    LocalNotificationService().onNotificationTap.listen((payload) {
-      debugPrint('🔔 Local notification tapped: $payload');
-      _navigateToLatestAlert(payload);
-    });
-
     runApp(const KhotaaApp());
   } catch (e, stackTrace) {
     debugPrint('Firebase initialization error: $e');
