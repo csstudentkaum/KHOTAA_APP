@@ -526,17 +526,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
     }
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ConsultationSessionScreen(
-              consultationId: c.consultationID,
-              isDoctor: false,
-            ),
-          ),
-        );
-      },
+      onTap: _isChatCallAvailable(c)
+          ? () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ConsultationSessionScreen(
+                    consultationId: c.consultationID,
+                    isDoctor: false,
+                  ),
+                ),
+              );
+            }
+          : null,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
