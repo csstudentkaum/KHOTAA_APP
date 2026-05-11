@@ -55,3 +55,8 @@ app.*.map.json
 *.local.json
 *.local.plist
 
+# Firebase Cloud Functions
+functions/node_modules/
+functions/.env
+functions/.runtimeconfig.json
+

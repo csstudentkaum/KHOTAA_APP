@@ -1,23 +1,47 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/firebase/consultation_chat_service.dart';
 
-// App ID and temporary test token are read from .env
+// Agora App ID from .env
 String get kAgoraAppId => dotenv.env['AGORA_APP_ID'] ?? '';
-String get kAgoraToken => dotenv.env['AGORA_TOKEN'] ?? '';
-String get kAgoraTestChannel => dotenv.env['AGORA_TEST_CHANNEL'] ?? '';
+
+// Firebase Cloud Function URL for token generation
+const String _kTokenFunctionUrl =
+    'https://getagoratoken-aeco2rhcma-uc.a.run.app';
+
+/// Fetches a short-lived Agora RTC token from the Firebase Cloud Function.
+/// Sends the current user's Firebase ID token as a Bearer token for auth.
+Future<String> _fetchAgoraToken(String channelName) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) throw Exception('Not authenticated');
+  final idToken = await user.getIdToken();
+
+  final uri = Uri.parse('$_kTokenFunctionUrl?channelName=$channelName&uid=0');
+  final response = await http.get(
+    uri,
+    headers: {'Authorization': 'Bearer $idToken'},
+  );
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['token'] as String;
+  }
+  throw Exception('Failed to fetch Agora token: ${response.statusCode}');
+}
 
 /// Full-screen Zoom-like video consultation screen.
 ///
-/// [channelId]       – Agora channel name
+/// [channelId]       – Agora channel name (consultation ID)
 /// [otherPersonName] – Display name shown in the waiting / active state
 ///
-/// For testing: set AGORA_TOKEN and AGORA_TEST_CHANNEL in your .env file.
-/// For production: upgrade to a token server (Vercel endpoint).
+/// Token is fetched from the Firebase Cloud Function before each call.
+/// To set up: firebase functions:secrets:set AGORA_APP_CERTIFICATE
 class AgoraVideoCallScreen extends StatefulWidget {
   final String channelId;
   final String otherPersonName;
@@ -171,22 +195,18 @@ class _AgoraVideoCallScreenState extends State<AgoraVideoCallScreen>
       onConnectionStateChanged: (connection, state, reason) {
         debugPrint('[Agora] connection state: $state, reason: $reason');
       },
-      onTokenPrivilegeWillExpire: (connection, token) {
-        debugPrint('[Agora] token will expire soon!');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Token expiring soon — rejoin may be needed')),
-          );
+      onTokenPrivilegeWillExpire: (connection, token) async {
+        debugPrint('[Agora] token will expire — renewing...');
+        try {
+          final newToken = await _fetchAgoraToken(_activeChannel);
+          await _engine?.renewToken(newToken);
+          debugPrint('[Agora] token renewed successfully');
+        } catch (e) {
+          debugPrint('[Agora] token renewal failed: $e');
         }
       },
       onError: (err, msg) {
         debugPrint('[Agora] error $err: $msg');
-        // Token expired or invalid
-        if (mounted && (err == ErrorCodeType.errTokenExpired || err == ErrorCodeType.errInvalidToken)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Agora token expired — generate a new one in the console')),
-          );
-        }
       },
     ));
 
@@ -203,9 +223,24 @@ class _AgoraVideoCallScreenState extends State<AgoraVideoCallScreen>
 
     if (mounted) setState(() => _engineReady = true);
 
-    // Use the temp token from .env; channel name is overridden to match
-    _activeChannel = kAgoraTestChannel.isNotEmpty ? kAgoraTestChannel : widget.channelId;
-    final token = kAgoraToken;
+    // Use the consultation's channel name directly
+    _activeChannel = widget.channelId;
+
+    // Fetch a signed token from the Firebase Cloud Function
+    String token = '';
+    try {
+      token = await _fetchAgoraToken(_activeChannel);
+      debugPrint('[Agora] token fetched successfully (${token.length} chars)');
+    } catch (e) {
+      debugPrint('[Agora] token fetch failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not get call token: $e')),
+        );
+        Navigator.of(context).pop();
+      }
+      return;
+    }
 
     await _engine!.joinChannel(
       token: token,
@@ -223,7 +258,7 @@ class _AgoraVideoCallScreenState extends State<AgoraVideoCallScreen>
 
     await _engine!.setEnableSpeakerphone(true);
 
-    debugPrint('[Agora] joined channel=$_activeChannel, token=${token.isNotEmpty ? "present (${token.length} chars)" : "EMPTY"}');
+    debugPrint('[Agora] joined channel=$_activeChannel');
   }
 
   // ── Timer ────────────────────────────────────────────────────────────────
