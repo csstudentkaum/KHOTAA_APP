@@ -76,8 +76,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _showError('Please select the card expiry date.');
       return;
     }
-    if (_cvvController.text.length < 3) {
-      _showError('Please enter a valid CVV.');
+    if (_cvvController.text.length != 3) {
+      _showError('CVV must be exactly 3 digits.');
       return;
     }
     if (_nameController.text.trim().isEmpty) {
@@ -460,7 +460,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               obscure: true,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
-                                LengthLimitingTextInputFormatter(4),
+                                LengthLimitingTextInputFormatter(3),
                               ],
                             ),
                           ],

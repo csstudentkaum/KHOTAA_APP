@@ -30,9 +30,6 @@ class PatientShellState extends State<PatientShell> {
   /// Allows child widgets to switch the active tab.
   void switchToTab(int index) {
     setState(() => _tab = index);
-    if (index == 3) {
-      _allDoctorsKey.currentState?.refreshFavorites();
-    }
   }
 
   late final List<Widget> _screens;
@@ -47,7 +44,7 @@ class PatientShellState extends State<PatientShell> {
       AllDoctorsScreen(key: _allDoctorsKey),
       const ProfileScreen(),
     ];
-    
+
     // Set global dialog context and start sensor monitoring
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -55,18 +52,22 @@ class PatientShellState extends State<PatientShell> {
         _sensorService.startMonitoring();
       }
     });
-    
+
     // Listen for notification taps to navigate to appropriate screen
-    _notificationTapSub = LocalNotificationService().onNotificationTap.listen(_handleNotificationTap);
+    _notificationTapSub = LocalNotificationService().onNotificationTap.listen(
+      _handleNotificationTap,
+    );
   }
-  
+
   void _handleNotificationTap(String payload) {
     debugPrint('📱 Notification tapped with payload: $payload');
     // Navigate to Preventive Tips screen when notification is tapped
     if (mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const PreventiveRecommendationsScreen()),
+        MaterialPageRoute(
+          builder: (_) => const PreventiveRecommendationsScreen(),
+        ),
       );
     }
   }
@@ -119,10 +120,6 @@ class PatientShellState extends State<PatientShell> {
             currentIndex: _tab,
             onTap: (i) {
               setState(() => _tab = i);
-              // Refresh favorites when switching to doctors tab
-              if (i == 3) {
-                _allDoctorsKey.currentState?.refreshFavorites();
-              }
             },
           ),
         ),

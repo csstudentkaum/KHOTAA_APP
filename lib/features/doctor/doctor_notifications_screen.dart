@@ -6,7 +6,9 @@ import '../../services/notification_service.dart';
 
 /// Doctor notifications screen — two tabs: Bookings & Patient Alerts
 class DoctorNotificationsScreen extends StatefulWidget {
-  const DoctorNotificationsScreen({super.key});
+  final int initialTab;
+
+  const DoctorNotificationsScreen({super.key, this.initialTab = 0});
 
   @override
   State<DoctorNotificationsScreen> createState() =>
@@ -41,7 +43,11 @@ class _DoctorNotificationsScreenState extends State<DoctorNotificationsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab,
+    );
   }
 
   @override

@@ -172,7 +172,7 @@ class _SelectDateTimeScreenState extends State<SelectDateTimeScreen> {
               ),
               title: const Text('Active Booking Exists'),
               content: const Text(
-                'You already have an active consultation. Please wait until it is completed before booking a new one.',
+                'You already have an active consultation or a pending follow-up session. Please complete it before booking a new one.',
               ),
               actions: [
                 TextButton(

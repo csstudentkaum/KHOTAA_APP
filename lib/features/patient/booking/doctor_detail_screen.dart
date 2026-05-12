@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../app/app_theme.dart';
 import '../../../models/doctor_model.dart';
@@ -16,7 +15,6 @@ class DoctorDetailScreen extends StatefulWidget {
 }
 
 class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
-  bool _isFavourite = false;
   Map<String, dynamic>? _workingHours;
   bool _loadingHours = true;
   late DoctorModel _doctor;
@@ -27,7 +25,6 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   void initState() {
     super.initState();
     _doctor = widget.doctor;
-    _loadFavouriteStatus();
     _loadWorkingHours();
     _refreshDoctorData();
   }
@@ -68,59 +65,6 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _loadingHours = false);
-    }
-  }
-
-  Future<void> _loadFavouriteStatus() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (doc.exists && mounted) {
-        final favs = List<String>.from(doc.data()?['favoriteDoctors'] ?? []);
-        setState(() => _isFavourite = favs.contains(doctor.id));
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _toggleFavourite() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() => _isFavourite = !_isFavourite);
-
-    try {
-      final ref = FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final doc = await ref.get();
-      final favs = List<String>.from(doc.data()?['favoriteDoctors'] ?? []);
-
-      if (_isFavourite) {
-        if (!favs.contains(doctor.id)) favs.add(doctor.id);
-      } else {
-        favs.remove(doctor.id);
-      }
-
-      await ref.update({'favoriteDoctors': favs});
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isFavourite ? 'Added to favourites' : 'Removed from favourites',
-            ),
-            backgroundColor: AppColors.primary,
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      }
-    } catch (e) {
-      // Revert on error
-      setState(() => _isFavourite = !_isFavourite);
     }
   }
 
@@ -201,16 +145,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  IconButton(
-                    onPressed: _toggleFavourite,
-                    icon: Icon(
-                      _isFavourite ? Icons.favorite : Icons.favorite_border,
-                      color: _isFavourite
-                          ? const Color(0xFFFF6B6B)
-                          : Colors.white70,
-                      size: 24,
-                    ),
-                  ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 8),

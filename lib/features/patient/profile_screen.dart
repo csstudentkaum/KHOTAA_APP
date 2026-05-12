@@ -5,7 +5,6 @@ import '../../app/app_theme.dart';
 import '../../shared/notifications_screen.dart';
 import 'booking/my_bookings_screen.dart';
 import 'edit_profile_screen.dart';
-import 'favourite_doctors_screen.dart';
 import 'help_support_screen.dart';
 import 'medical_info_screen.dart';
 import 'services/sensor_data_service.dart';
@@ -156,18 +155,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       .findAncestorStateOfType<PatientShellState>();
                   shellState?.switchToTab(3);
                 }
-              },
-            ),
-            _profileTile(
-              icon: Icons.favorite_outline,
-              title: 'Favourite Doctors',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const FavouriteDoctorsScreen(),
-                  ),
-                );
               },
             ),
             _profileTile(
