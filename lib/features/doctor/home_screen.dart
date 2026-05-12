@@ -919,8 +919,11 @@ class _DHomeScreenState extends State<DHomeScreen>
               const SizedBox(height: 4),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w500,
                   color: Colors.grey[600],
                 ),
