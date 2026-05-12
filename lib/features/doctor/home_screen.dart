@@ -945,9 +945,9 @@ class _DHomeScreenState extends State<DHomeScreen>
         children: [
           buildStatCard(
             served,
-            'Served Patients',
+            'Completed',
             const Color(0xFF3B82F6),
-            Icons.people_outline,
+            Icons.check_circle_outline,
           ),
           const SizedBox(width: 12),
           buildStatCard(
