@@ -10,7 +10,6 @@ import '../../shared/in_app_notification_popup.dart';
 import 'doctor_notifications_screen.dart';
 import '../../models/consultation.dart';
 import 'patient_detail_screen.dart';
-import 'image_review_screen.dart';
 import 'treatment_plan_screen.dart';
 import 'consultation_requests_screen.dart';
 import 'doctor_edit_profile_screen.dart';
@@ -305,11 +304,13 @@ class _DHomeScreenState extends State<DHomeScreen>
                     ),
                     const SizedBox(width: 12),
                     _quickAction(
-                      icon: Icons.image_search_outlined,
-                      label: 'Image\nReview',
-                      description: 'Review foot images',
+                      icon: Icons.notifications_active_outlined,
+                      label: 'Patient\nAlerts',
+                      description: 'View patient risk alerts',
                       color: const Color(0xFF22C55E),
-                      onTap: () => _navigateTo(const ImageReviewScreen()),
+                      onTap: () => _navigateTo(
+                        const DoctorNotificationsScreen(initialTab: 1),
+                      ),
                     ),
                   ],
                 ),
@@ -919,8 +920,11 @@ class _DHomeScreenState extends State<DHomeScreen>
               const SizedBox(height: 4),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w500,
                   color: Colors.grey[600],
                 ),
@@ -931,14 +935,26 @@ class _DHomeScreenState extends State<DHomeScreen>
       );
     }
 
-    Widget buildContent(String patients, String today, String upcoming) {
+    Widget buildContent(
+      String served,
+      String followUp,
+      String today,
+      String upcoming,
+    ) {
       return Row(
         children: [
           buildStatCard(
-            patients,
-            'Patients',
+            served,
+            'Completed',
             const Color(0xFF3B82F6),
-            Icons.people_outline,
+            Icons.check_circle_outline,
+          ),
+          const SizedBox(width: 12),
+          buildStatCard(
+            followUp,
+            'Follow-Up',
+            const Color(0xFF8B5CF6),
+            Icons.event_repeat_rounded,
           ),
           const SizedBox(width: 12),
           buildStatCard(
@@ -959,7 +975,7 @@ class _DHomeScreenState extends State<DHomeScreen>
     }
 
     if (user == null) {
-      return buildContent('0', '0', '0');
+      return buildContent('0', '0', '0', '0');
     }
 
     return StreamBuilder<List<Consultation>>(
@@ -971,9 +987,14 @@ class _DHomeScreenState extends State<DHomeScreen>
         final startOfDay = DateTime(now.year, now.month, now.day);
         final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        final uniquePatients = allBookings
+        final servedCount = allBookings
+            .where((b) => b.status == 'completed')
             .map((b) => b.patientID)
             .toSet()
+            .length;
+
+        final followUpCount = allBookings
+            .where((b) => b.status == 'followUp')
             .length;
 
         final todayCount = allBookings.where((b) {
@@ -993,7 +1014,12 @@ class _DHomeScreenState extends State<DHomeScreen>
             )
             .length;
 
-        return buildContent('$uniquePatients', '$todayCount', '$upcomingCount');
+        return buildContent(
+          '$servedCount',
+          '$followUpCount',
+          '$todayCount',
+          '$upcomingCount',
+        );
       },
     );
   }
@@ -1008,7 +1034,7 @@ class _DHomeScreenState extends State<DHomeScreen>
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(
-          'My Patients',
+          'Follow-Up Patients',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -1062,6 +1088,7 @@ class _DHomeScreenState extends State<DHomeScreen>
                   )
                   .where('status', isEqualTo: 'followUp')
                   .snapshots(),
+
               builder: (context, consultSnap) {
                 if (consultSnap.connectionState == ConnectionState.waiting) {
                   return const Center(
