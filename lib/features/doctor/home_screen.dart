@@ -29,10 +29,12 @@ class _DHomeScreenState extends State<DHomeScreen>
   int _currentIndex = 0;
   String _firstName = '';
   String _lastName = '';
-  int _selectedAppointmentTab = 0; // 0=Upcoming, 1=Follow-Up, 2=Completed
+  int _selectedAppointmentTab = 0;
   late TabController _appointmentTabController;
   final DoctorRiskMonitor _riskMonitor = DoctorRiskMonitor();
   final Set<String> _autoCompletedFollowUps = {};
+  final TextEditingController _patientSearchController = TextEditingController();
+  String _patientSearchQuery = '';
 
   @override
   void initState() {
@@ -59,6 +61,7 @@ class _DHomeScreenState extends State<DHomeScreen>
   @override
   void dispose() {
     _appointmentTabController.dispose();
+    _patientSearchController.dispose();
     _riskMonitor.stopMonitoring();
     super.dispose();
   }
@@ -951,6 +954,13 @@ class _DHomeScreenState extends State<DHomeScreen>
             'Completed',
             const Color(0xFF3B82F6),
             Icons.check_circle_outline,
+          ),
+          const SizedBox(width: 12),
+          buildStatCard(
+            followUp,
+            'Follow-Up',
+            const Color(0xFF8B5CF6),
+            Icons.event_repeat_rounded,
           ),
           const SizedBox(width: 12),
           buildStatCard(

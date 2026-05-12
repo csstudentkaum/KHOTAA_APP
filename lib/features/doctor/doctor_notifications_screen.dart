@@ -7,6 +7,7 @@ import '../../services/notification_service.dart';
 /// Doctor notifications screen — two tabs: Bookings & Patient Alerts
 class DoctorNotificationsScreen extends StatefulWidget {
   final int initialTab;
+
   const DoctorNotificationsScreen({super.key, this.initialTab = 0});
 
   @override

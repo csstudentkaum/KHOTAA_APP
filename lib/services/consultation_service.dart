@@ -65,7 +65,7 @@ class ConsultationService {
   Future<bool> hasActiveConsultation(String patientID) async {
     final snapshot = await _consultationsRef
         .where('patientID', isEqualTo: patientID)
-        .where('status', whereIn: ['accepted', 'pending'])
+        .where('status', whereIn: ['accepted', 'pending', 'active', 'followUp'])
         .limit(1)
         .get();
     return snapshot.docs.isNotEmpty;

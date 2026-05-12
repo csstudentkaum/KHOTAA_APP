@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../app/app_theme.dart';
 import '../../../models/doctor_model.dart';
 import '../../../services/consultation_service.dart';
@@ -23,14 +21,12 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
   List<DoctorModel> _doctors = [];
   List<DoctorModel> _filteredDoctors = [];
   bool _isLoading = true;
-  Set<String> _favoriteDoctors = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadDoctors();
-    _loadFavorites();
     _searchController.addListener(_filterDoctors);
   }
 
@@ -42,11 +38,7 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _loadFavorites();
-    }
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) {}
 
   Future<void> _loadDoctors() async {
     try {
@@ -63,53 +55,6 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  Future<void> _loadFavorites() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (doc.exists && mounted) {
-        final favorites = List<String>.from(
-          doc.data()?['favoriteDoctors'] ?? [],
-        );
-        setState(() {
-          _favoriteDoctors = favorites.toSet();
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading favorites: $e');
-    }
-  }
-
-  /// Public method so the shell can trigger a refresh on tab switch.
-  void refreshFavorites() => _loadFavorites();
-
-  Future<void> _toggleFavorite(String doctorId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() {
-      if (_favoriteDoctors.contains(doctorId)) {
-        _favoriteDoctors.remove(doctorId);
-      } else {
-        _favoriteDoctors.add(doctorId);
-      }
-    });
-
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
-        {'favoriteDoctors': _favoriteDoctors.toList()},
-      );
-    } catch (e) {
-      debugPrint('Error updating favorites: $e');
     }
   }
 
@@ -132,7 +77,7 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
   @override
   Widget build(BuildContext context) {
     final canGoBack = Navigator.canPop(context);
-    
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -304,7 +249,6 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
   }
 
   Widget _buildDoctorCard(DoctorModel doctor) {
-    final isFavorite = _favoriteDoctors.contains(doctor.id);
     final hasRating = doctor.ratingCount > 0;
 
     return GestureDetector(
@@ -315,7 +259,6 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
             builder: (context) => DoctorDetailScreen(doctor: doctor),
           ),
         );
-        _loadFavorites();
         _loadDoctors();
       },
       child: Container(
@@ -429,41 +372,21 @@ class AllDoctorsScreenState extends State<AllDoctorsScreen>
               ),
             ),
 
-            // Right side: Favorite + Book
-            Column(
-              children: [
-                GestureDetector(
-                  onTap: () => _toggleFavorite(doctor.id),
-                  child: Icon(
-                    isFavorite
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    color: isFavorite
-                        ? const Color(0xFFEF4444)
-                        : AppColors.textHint,
-                    size: 22,
-                  ),
+            // Right side: Book button
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Book',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
                 ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Book',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
