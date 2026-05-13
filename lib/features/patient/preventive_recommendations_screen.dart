@@ -260,7 +260,7 @@ class _PreventiveRecommendationsScreenState
                 ),
               ),
               Text(
-                '${((_completedCount / _recommendations.length) * 100).toInt()}%',
+                '${_recommendations.isEmpty ? 0 : ((_completedCount / _recommendations.length) * 100).toInt()}%',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
