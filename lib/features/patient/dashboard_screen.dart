@@ -808,6 +808,13 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildRealTimeMetrics() {
+    final bool live = _sensorService.isLeftFootLive;
+    final Color offColor = Colors.grey;
+    final List<Color> offGradient = [
+      Colors.grey.withValues(alpha: 0.15),
+      Colors.grey.withValues(alpha: 0.05),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -826,12 +833,18 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.thermostat_rounded,
                 label: 'Avg Temperature',
-                value: '${_sensorService.temperature.toStringAsFixed(1)}°C',
-                color: _getTempColor(_sensorService.temperature),
-                gradient: [
-                  _getTempColor(_sensorService.temperature).withValues(alpha: 0.15),
-                  _getTempColor(_sensorService.temperature).withValues(alpha: 0.05),
-                ],
+                value: live
+                    ? '${_sensorService.temperature.toStringAsFixed(1)}°C'
+                    : '--',
+                color: live
+                    ? _getTempColor(_sensorService.temperature)
+                    : offColor,
+                gradient: live
+                    ? [
+                        _getTempColor(_sensorService.temperature).withValues(alpha: 0.15),
+                        _getTempColor(_sensorService.temperature).withValues(alpha: 0.05),
+                      ]
+                    : offGradient,
               ),
             ),
             const SizedBox(width: 16),
@@ -839,12 +852,18 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.compress_rounded,
                 label: 'Avg Pressure',
-                value: '${_sensorService.pressure.toStringAsFixed(0)} kPa',
-                color: _getPressureColor(_sensorService.pressure / 100),
-                gradient: [
-                  _getPressureColor(_sensorService.pressure / 100).withValues(alpha: 0.15),
-                  _getPressureColor(_sensorService.pressure / 100).withValues(alpha: 0.05),
-                ],
+                value: live
+                    ? '${_sensorService.pressure.toStringAsFixed(0)} kPa'
+                    : '--',
+                color: live
+                    ? _getPressureColor(_sensorService.pressure / 100)
+                    : offColor,
+                gradient: live
+                    ? [
+                        _getPressureColor(_sensorService.pressure / 100).withValues(alpha: 0.15),
+                        _getPressureColor(_sensorService.pressure / 100).withValues(alpha: 0.05),
+                      ]
+                    : offGradient,
               ),
             ),
           ],
@@ -856,12 +875,14 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.directions_walk_rounded,
                 label: 'Steps Today',
-                value: _formatNumber(_sensorService.stepsToday),
-                color: const Color(0xFF5C6BC0),
-                gradient: [
-                  const Color(0xFF5C6BC0).withValues(alpha: 0.15),
-                  const Color(0xFF5C6BC0).withValues(alpha: 0.05),
-                ],
+                value: live ? _formatNumber(_sensorService.stepsToday) : '--',
+                color: live ? const Color(0xFF5C6BC0) : offColor,
+                gradient: live
+                    ? [
+                        const Color(0xFF5C6BC0).withValues(alpha: 0.15),
+                        const Color(0xFF5C6BC0).withValues(alpha: 0.05),
+                      ]
+                    : offGradient,
               ),
             ),
             const SizedBox(width: 16),
@@ -869,12 +890,16 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: _buildMetricCard(
                 icon: Icons.timer_rounded,
                 label: 'Wearing Time',
-                value: _formatDuration(_sensorService.wearingDuration),
-                color: const Color(0xFF26A69A),
-                gradient: [
-                  const Color(0xFF26A69A).withValues(alpha: 0.15),
-                  const Color(0xFF26A69A).withValues(alpha: 0.05),
-                ],
+                value: live
+                    ? _formatDuration(_sensorService.wearingDuration)
+                    : '--',
+                color: live ? const Color(0xFF26A69A) : offColor,
+                gradient: live
+                    ? [
+                        const Color(0xFF26A69A).withValues(alpha: 0.15),
+                        const Color(0xFF26A69A).withValues(alpha: 0.05),
+                      ]
+                    : offGradient,
               ),
             ),
           ],

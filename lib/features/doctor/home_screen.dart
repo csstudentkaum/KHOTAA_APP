@@ -354,7 +354,10 @@ class _DHomeScreenState extends State<DHomeScreen>
                     ),
                   ),
                   TextButton(
-                    onPressed: () => setState(() => _currentIndex = 2),
+                    onPressed: () => setState(() {
+                      _currentIndex = 2;
+                      _appointmentTabController.animateTo(0);
+                    }),
                     child: const Text('See All'),
                   ),
                 ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -10,7 +10,12 @@ import '../../models/alert.dart';
 import '../../services/daily_sensor_summary_service.dart';
 
 class WeeklyReportScreen extends StatefulWidget {
-  const WeeklyReportScreen({super.key});
+  /// When [patientId] is provided the screen is rendered in read-only doctor
+  /// mode: data is loaded directly from Firestore for that patient instead of
+  /// using the logged-in user's singletons.
+  final String? patientId;
+
+  const WeeklyReportScreen({super.key, this.patientId});
 
   @override
   State<WeeklyReportScreen> createState() => _WeeklyReportScreenState();
@@ -19,7 +24,7 @@ class WeeklyReportScreen extends StatefulWidget {
 class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   final List<String> _weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // Alert counts (from AlertService)
+  // Alert counts (from AlertService or Firestore)
   int _temperatureAlerts = 0;
   int _pressureAlerts = 0;
   int _combinedAlerts = 0;
@@ -29,24 +34,112 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
 
   bool _isDownloading = false;
 
+  // ── Doctor-mode state (populated from Firestore when patientId is set) ────
+  List<SmartAlert> _doctorAlerts = [];
+  List<double> _doctorWeeklyLeft  = List.filled(8, 0);
+  List<double> _doctorWeeklyRight = List.filled(8, 0);
+  List<double> _doctorWeeklyAsymm = List.filled(8, 0);
+  bool _isDoctorLoading = false;
+
+  bool get _isDoctorMode => widget.patientId != null;
+
+  /// Returns the alert list appropriate for the current mode.
+  List<SmartAlert> get _activeAlerts =>
+      _isDoctorMode ? _doctorAlerts : AlertService().alerts;
+
   @override
   void initState() {
     super.initState();
     _computeWeekBounds();
-    _loadChartData();
-    _loadAlertCounts();
-    // Re-render whenever daily summaries update (live sensor accumulation)
-    DailySensorSummaryService().addListener(_loadChartData);
-    // Re-render whenever alert service syncs new data from Firestore
-    AlertService().addListener(_loadAlertCounts);
+    if (_isDoctorMode) {
+      _loadDoctorData();
+    } else {
+      _loadChartData();
+      _loadAlertCounts();
+      // Re-render whenever daily summaries update (live sensor accumulation)
+      DailySensorSummaryService().addListener(_loadChartData);
+      // Re-render whenever alert service syncs new data from Firestore
+      AlertService().addListener(_loadAlertCounts);
+    }
   }
 
   @override
   void dispose() {
-    DailySensorSummaryService().removeListener(_loadChartData);
-    AlertService().removeListener(_loadAlertCounts);
+    if (!_isDoctorMode) {
+      DailySensorSummaryService().removeListener(_loadChartData);
+      AlertService().removeListener(_loadAlertCounts);
+    }
     super.dispose();
   }
+
+  /// Loads alerts + daily summaries from Firestore for the given patient.
+  Future<void> _loadDoctorData() async {
+    final pid = widget.patientId!;
+    setState(() => _isDoctorLoading = true);
+    try {
+      // ── Alerts ────────────────────────────────────────────────────────────
+      final alertSnap = await FirebaseFirestore.instance
+          .collection('alerts')
+          .where('patientId', isEqualTo: pid)
+          .orderBy('timestamp', descending: true)
+          .limit(100)
+          .get();
+      _doctorAlerts = alertSnap.docs
+          .map((d) => SmartAlert.fromFirestore(d))
+          .where((a) =>
+              !a.timestamp.isBefore(_weekStart) &&
+              a.timestamp.isBefore(_weekEnd.add(const Duration(days: 1))))
+          .toList();
+
+      // ── Daily summaries ───────────────────────────────────────────────────
+      final summarySnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(pid)
+          .collection('dailySummaries')
+          .where('date', isGreaterThanOrEqualTo: _dateKey(_weekStart))
+          .where('date', isLessThan: _dateKey(_weekEnd.add(const Duration(days: 1))))
+          .get();
+
+      final left  = List<double>.filled(8, 0);
+      final right = List<double>.filled(8, 0);
+      final asymm = List<double>.filled(8, 0);
+
+      for (final doc in summarySnap.docs) {
+        final d = doc.data();
+        List<double> readList(String field) {
+          final raw = d[field];
+          if (raw is List) return raw.map((e) => (e as num).toDouble()).toList();
+          return List.filled(8, 0.0);
+        }
+        final dayLeft  = readList('peakLeftPressureKpa');
+        final dayRight = readList('peakRightPressureKpa');
+        final dayAsymm = readList('peakTempAsymmetryPerRegion');
+        for (int i = 0; i < 8; i++) {
+          if (i < dayLeft.length  && dayLeft[i]  > left[i])  left[i]  = dayLeft[i];
+          if (i < dayRight.length && dayRight[i] > right[i]) right[i] = dayRight[i];
+          if (i < dayAsymm.length && dayAsymm[i] > asymm[i]) asymm[i] = dayAsymm[i];
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _doctorWeeklyLeft  = left;
+          _doctorWeeklyRight = right;
+          _doctorWeeklyAsymm = asymm;
+          _isDoctorLoading   = false;
+        });
+        _loadAlertCounts();
+      }
+    } catch (e) {
+      debugPrint('WeeklyReportScreen: error loading doctor data: $e');
+      if (mounted) setState(() => _isDoctorLoading = false);
+    }
+  }
+
+  static String _dateKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   void _computeWeekBounds() {
     final now = DateTime.now();
@@ -59,9 +152,9 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   /// Trigger rebuild whenever DailySensorSummaryService updates.
   void _loadChartData() => setState(() {});
 
-  /// Alert breakdown counts — still derived from AlertService.
+  /// Alert breakdown counts — derived from the active alert source.
   void _loadAlertCounts() {
-    final allAlerts = AlertService().alerts;
+    final allAlerts = _activeAlerts;
 
     final weekAlerts = allAlerts.where((a) {
       return a.notificationType == NotificationType.health &&
@@ -98,13 +191,38 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
 
   DailySensorSummaryService get _svc => DailySensorSummaryService();
 
-  double get _peakAsymmetryThisWeek => _svc.weeklyPeakAsymmetry;
-  double get _peakPressureThisWeek  => _svc.weeklyPeakPressureKpa;
+  // Per-region weekly peaks — doctor mode uses Firestore-loaded lists.
+  List<double> get _weeklyLeft  => _isDoctorMode ? _doctorWeeklyLeft  : _svc.weeklyLeftPeakPressure;
+  List<double> get _weeklyRight => _isDoctorMode ? _doctorWeeklyRight : _svc.weeklyRightPeakPressure;
+  List<double> get _weeklyAsymm => _isDoctorMode ? _doctorWeeklyAsymm : _svc.weeklyPeakAsymmetryPerRegion;
+
+  double get _peakAsymmetryThisWeek => _weeklyAsymm.fold(0.0, (a, b) => a > b ? a : b);
+  double get _peakPressureThisWeek  =>
+      [..._weeklyLeft, ..._weeklyRight].fold(0.0, (a, b) => a > b ? a : b);
 
   int get _totalAlerts => _temperatureAlerts + _pressureAlerts + _combinedAlerts;
 
+  /// Per-day risk level derived from SAVED ALERTS only (consistent with Total Alerts count).
+  /// 0 = no alert · 2 = single-factor (temp OR pressure) · 3 = combined (temp AND pressure)
+  List<int> get _alertDailyRiskLevels {
+    final levels = List<int>.filled(7, 0);
+    for (final alert in _activeAlerts) {
+      if (alert.notificationType != NotificationType.health) continue;
+      final ts = alert.timestamp;
+      if (ts.isBefore(_weekStart) ||
+          ts.isAfter(_weekEnd.add(const Duration(days: 1)))) continue;
+      final dayIdx = ts.difference(_weekStart).inDays;
+      if (dayIdx < 0 || dayIdx >= 7) continue;
+      final lvl = alert.category == RiskCategory.combined
+          ? 3
+          : 2; // temperature or pressure = moderate
+      if (lvl > levels[dayIdx]) levels[dayIdx] = lvl;
+    }
+    return levels;
+  }
+
   String get _highestRiskDay {
-    final levels = _svc.weekDailyRiskLevels;
+    final levels = _alertDailyRiskLevels;
     int maxIdx = -1;
     int maxVal = 0;
     for (int i = 0; i < levels.length; i++) {
@@ -114,20 +232,16 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   }
 
   String get _overallRiskStatus {
-    final p = _peakPressureThisWeek;
-    final a = _peakAsymmetryThisWeek;
-    if ((p >= 200.0 && a >= 2.2) || _combinedAlerts > 0 || _totalAlerts > 8) return 'High';
-    if (p >= 200.0 || a >= 2.2 || _totalAlerts > 4) return 'Medium';
-    if (_totalAlerts > 0 || p > 0 || a > 0) return 'Low';
+    if (_combinedAlerts > 0) return 'High';
+    if (_temperatureAlerts > 0 || _pressureAlerts > 0) return 'Moderate';
     return 'Normal';
   }
 
   Color get _overallRiskColor {
     switch (_overallRiskStatus) {
-      case 'High':   return const Color(0xFFE53935);
-      case 'Medium': return const Color(0xFFFFA726);
-      case 'Low':    return const Color(0xFF4CAF50);
-      default:       return const Color(0xFF4CAF50);
+      case 'High':     return const Color(0xFFE53935);
+      case 'Moderate': return const Color(0xFFFFA726);
+      default:         return const Color(0xFF4CAF50);
     }
   }
 
@@ -145,6 +259,15 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isDoctorLoading) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: _buildAppBar(),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: _buildAppBar(),
@@ -164,8 +287,8 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
             const SizedBox(height: 24),
             _buildRiskBreakdown(),
             const SizedBox(height: 24),
-            _buildDownloadButton(),
-            const SizedBox(height: 20),
+            if (!_isDoctorMode) _buildDownloadButton(),
+            if (!_isDoctorMode) const SizedBox(height: 20),
           ],
         ),
       ),
@@ -294,7 +417,6 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          // Summary metrics in 2x2 grid
           Row(
             children: [
               Expanded(
@@ -385,12 +507,8 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     );
   }
 
-  // ── 7-Day Risk Calendar ────────────────────────────────────────────────────
-  // Each day = a colored box: grey=no data · green=normal · orange=moderate · red=high
-  // The patient and doctor can see at a glance which days had risk events.
-
   Widget _buildDailyRiskCalendar() {
-    final riskLevels = _svc.weekDailyRiskLevels;
+    final riskLevels = _alertDailyRiskLevels;
     final today      = DateTime.now().weekday % 7; // Sun=0…Sat=6
 
     Color boxColor(int level) {
@@ -405,7 +523,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     String boxLabel(int level) {
       switch (level) {
         case 3:  return 'High';
-        case 2:  return 'Moderate';
+        case 2:  return 'Mod.';
         case 1:  return 'OK';
         default: return '–';
       }
@@ -487,14 +605,10 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     );
   }
 
-  // ── Region Risk Table ──────────────────────────────────────────────────────
-  // 8 anatomical rows × (Left kPa | Right kPa | Asymmetry °C)
-  // Color coded against IWGDF thresholds. Exactly what a podiatrist needs.
-
   Widget _buildRegionRiskTable() {
-    final leftP   = _svc.weeklyLeftPeakPressure;
-    final rightP  = _svc.weeklyRightPeakPressure;
-    final asymm   = _svc.weeklyPeakAsymmetryPerRegion;
+    final leftP   = _weeklyLeft;
+    final rightP  = _weeklyRight;
+    final asymm   = _weeklyAsymm;
 
     final hasAnyData = leftP.any((v) => v > 0) ||
         rightP.any((v) => v > 0) ||
@@ -541,7 +655,6 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
       iconColor: const Color(0xFF5C6BC0),
       child: Column(
         children: [
-          // Threshold legend
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
@@ -602,8 +715,6 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
       ),
     );
   }
-
-  // ── Shared card wrapper ────────────────────────────────────────────────────
 
   Widget _cardWrap({
     required String title,
@@ -712,7 +823,6 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          // Alert breakdown by category (matching RiskCategory)
           if (_totalAlerts == 0)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
@@ -756,6 +866,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   }
 
   Widget _buildAlertBreakdownItem({
+
     required String label,
     required int count,
     required Color color,
@@ -802,7 +913,6 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        // Progress bar
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: LinearProgressIndicator(
@@ -979,9 +1089,9 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
               cellHeight: 30,
               headers: ['Region', 'Left (kPa)', 'Right (kPa)', 'Asymmetry (°C)'],
               data: List.generate(8, (r) {
-                final lp = _svc.weeklyLeftPeakPressure[r];
-                final rp = _svc.weeklyRightPeakPressure[r];
-                final as_ = _svc.weeklyPeakAsymmetryPerRegion[r];
+                final lp  = _weeklyLeft[r];
+                final rp  = _weeklyRight[r];
+                final as_ = _weeklyAsymm[r];
                 return [
                   kRegionLabels[r],
                   lp > 0 ? lp.toStringAsFixed(0) : '–',
@@ -1147,20 +1257,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
   }
 
   String _formatDate(DateTime date) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return '${date.day} ${months[date.month - 1]}';
   }
 }

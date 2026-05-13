@@ -91,8 +91,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                   .toUpperCase();
           final age = userData['age'] ?? '--';
           final gender = userData['gender'] ?? 'N/A';
-          final riskLevel = userData['riskLevel'] ?? 'Moderate';
-
           // ── Insole monitoring status (written by patient dashboard) ──
           final insoleStatus =
               userData['insoleStatus'] as Map<String, dynamic>? ?? {};
@@ -246,7 +244,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                       initials: initials,
                       age: age,
                       gender: gender,
-                      riskLevel: riskLevel,
                       lastReadingTime: displayLastReading,
                     ),
                   ),
@@ -305,7 +302,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
 
                               // Live Status
                               _buildLiveStatusSection(
-                                riskLevel: riskLevel,
                                 isPatientMonitoringActive:
                                     isPatientMonitoringActive,
                                 insoleConnected: insoleConnected,
@@ -370,23 +366,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
     required String initials,
     required dynamic age,
     required String gender,
-    required String riskLevel,
     required String lastReadingTime,
   }) {
-    Color riskColor;
-    switch (riskLevel.toLowerCase()) {
-      case 'high':
-        riskColor = const Color(0xFFEF4444);
-        break;
-      case 'moderate':
-        riskColor = const Color(0xFFF59E0B);
-        break;
-      case 'low':
-        riskColor = const Color(0xFF22C55E);
-        break;
-      default:
-        riskColor = AppColors.textSecondary;
-    }
 
     return Container(
       width: double.infinity,
@@ -440,25 +421,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                       ),
                     ),
                   ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: riskColor.withAlpha(25),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: riskColor.withAlpha(80)),
-                ),
-                child: Text(
-                  riskLevel,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: riskColor,
-                  ),
                 ),
               ),
             ],
@@ -525,7 +487,9 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const WeeklyReportScreen()),
+              MaterialPageRoute(
+                builder: (_) => WeeklyReportScreen(patientId: widget.patientId),
+              ),
             );
           },
           child: const Padding(
@@ -880,7 +844,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
   //  Live Status Section (dashboard_screen style)
   // ══════════════════════════════════════════════════════════════════
   Widget _buildLiveStatusSection({
-    required String riskLevel,
     required bool isPatientMonitoringActive,
     required bool insoleConnected,
   }) {
@@ -892,21 +855,15 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
     Color statusColor;
     String statusText;
     IconData statusIcon;
-    switch (riskLevel.toLowerCase()) {
-      case 'high':
-        statusColor = const Color(0xFFF57C00);
-        statusText = 'Needs Attention';
-        statusIcon = Icons.info_outline;
-        break;
-      case 'moderate':
-        statusColor = const Color(0xFFF59E0B);
-        statusText = 'Moderate Risk';
-        statusIcon = Icons.show_chart;
-        break;
-      default:
-        statusColor = const Color(0xFF4CAF50);
-        statusText = 'Normal';
-        statusIcon = Icons.check_circle_outline;
+
+    if (isPatientMonitoringActive) {
+      statusColor = const Color(0xFF4CAF50);
+      statusText = 'Monitoring Active';
+      statusIcon = Icons.monitor_heart;
+    } else {
+      statusColor = Colors.grey;
+      statusText = 'No Live Data';
+      statusIcon = Icons.hourglass_empty_outlined;
     }
 
     return Container(
@@ -1185,7 +1142,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
             Expanded(
               child: _buildMetricCard(
                 icon: Icons.thermostat_rounded,
-                label: 'Temperature',
+                label: 'Avg Temperature',
                 value: temperature > 0
                     ? '${temperature.toStringAsFixed(1)}°C'
                     : '-- °C',
@@ -1378,7 +1335,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legendDot(const Color(0xFF4CAF50), 'Low'),
+              _legendDot(const Color(0xFF4CAF50), 'Normal'),
               const SizedBox(width: 20),
               _legendDot(const Color(0xFFFFA726), 'Medium'),
               const SizedBox(width: 20),

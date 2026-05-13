@@ -1255,7 +1255,6 @@ class _PatientDetailScreenState extends State<_PatientDetailScreen> {
           final age = userData['age'] ?? '--';
           final gender = userData['gender'] ?? 'N/A';
           final diabetesType = userData['diabetesType'] ?? 'Type 2';
-          final riskLevel = userData['riskLevel'] ?? 'Moderate';
 
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -1321,7 +1320,6 @@ class _PatientDetailScreenState extends State<_PatientDetailScreen> {
                       initials: initials,
                       age: age,
                       gender: gender,
-                      riskLevel: riskLevel,
                       diabetesType: diabetesType,
                       lastReadingTime: lastReadingTime,
                       phone: phone,
@@ -1499,26 +1497,11 @@ class _PatientDetailScreenState extends State<_PatientDetailScreen> {
     required String initials,
     required dynamic age,
     required String gender,
-    required String riskLevel,
     required String diabetesType,
     required String lastReadingTime,
     required String phone,
     required String email,
   }) {
-    Color riskColor;
-    switch (riskLevel.toLowerCase()) {
-      case 'high':
-        riskColor = const Color(0xFFEF4444);
-        break;
-      case 'moderate':
-        riskColor = const Color(0xFFF59E0B);
-        break;
-      case 'low':
-        riskColor = const Color(0xFF22C55E);
-        break;
-      default:
-        riskColor = AppColors.textSecondary;
-    }
 
     return Container(
       width: double.infinity,
@@ -1573,25 +1556,6 @@ class _PatientDetailScreenState extends State<_PatientDetailScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: riskColor.withAlpha(25),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: riskColor.withAlpha(80)),
-                ),
-                child: Text(
-                  riskLevel,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: riskColor,
-                  ),
                 ),
               ),
             ],
