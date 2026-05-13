@@ -964,13 +964,6 @@ class _DHomeScreenState extends State<DHomeScreen>
           ),
           const SizedBox(width: 12),
           buildStatCard(
-            followUp,
-            'Follow-Up',
-            const Color(0xFF8B5CF6),
-            Icons.event_repeat_rounded,
-          ),
-          const SizedBox(width: 12),
-          buildStatCard(
             today,
             'Today',
             const Color(0xFF10B981),
