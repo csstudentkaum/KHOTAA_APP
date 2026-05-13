@@ -72,11 +72,8 @@ class _ConnectInsoleScreenState extends State<ConnectInsoleScreen>
 
   Future<void> _initializeBluetooth() async {
     await _bluetoothService.initialize();
-    if (_bluetoothService.connectionState == InsoleConnectionState.bluetoothOff) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) showBluetoothOffDialog(context);
-      });
-    }
+    // Do NOT show Bluetooth-off dialog on screen open.
+    // It will be shown only when the user taps the connect button.
   }
 
   @override
