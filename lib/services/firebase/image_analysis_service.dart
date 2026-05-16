@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
@@ -13,15 +12,12 @@ import '../../models/image_analysis.dart';
 /// Handles the full image-analysis pipeline:
 ///   1. Upload photo → Firebase Storage
 ///   2. Save MedicalImages doc → Firestore
-///   3. Run classification (simulated until ML endpoint is ready)
+///   3. Run classification
 ///   4. Save ImageAnalysis doc → Firestore
 class ImageAnalysisService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
-
-  /// Set to `false` once your real ML model endpoint is deployed.
-  static const bool useSimulatedAI = false;
 
   /// Set to `true` to save images & records to Firebase Storage + Firestore.
   static const bool persistData = true;
@@ -87,8 +83,6 @@ class ImageAnalysisService {
 
   // ── 2. Analyse the image ──────────────────────────────────────────
 
-  /// Returns a simulated result when useSimulatedAI is true.
-  /// Replace the simulation with an HTTP call to your deployed model.
   Future<ImageAnalysis> analyse(MedicalImages image) async {
     final uid = _uid ?? 'demo-user';
 
@@ -97,46 +91,37 @@ class ImageAnalysisService {
     late double confidence;
     late String notes;
 
-    if (useSimulatedAI) {
-      // Simulated — remove once real model is deployed
-      await Future.delayed(const Duration(milliseconds: 1500));
-      final sim = _simulate();
-      classification = sim.classification;
-      confidence = sim.confidence;
-      notes = sim.notes;
-    } else {
-      final modelUrl = dotenv.env['MODEL_URL'] ?? '';
-      if (modelUrl.isEmpty) throw Exception('MODEL_URL not set in .env');
+    final modelUrl = dotenv.env['MODEL_URL'] ?? '';
+    if (modelUrl.isEmpty) throw Exception('MODEL_URL not set in .env');
 
-      // Download image bytes from Firebase Storage URL
-      final imageResp = await http.get(Uri.parse(image.filePath));
-      if (imageResp.statusCode != 200) {
-        throw Exception('Failed to fetch image for inference');
-      }
-
-      // Send as multipart file upload
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$modelUrl/predict'),
-      );
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        imageResp.bodyBytes,
-        filename: 'image.jpg',
-        contentType: MediaType('image', 'jpeg'),
-      ));
-      final streamed = await request.send();
-      final response = await http.Response.fromStream(streamed);
-
-      if (response.statusCode != 200) {
-        throw Exception('Model inference failed: ${response.body}');
-      }
-
-      final result = jsonDecode(response.body);
-      classification = UlcerClassX.fromString(result['prediction'] as String);
-      confidence = (result['confidence'] as num).toDouble();
-      notes = _noteFor(classification);
+    // Download image bytes from Firebase Storage URL
+    final imageResp = await http.get(Uri.parse(image.filePath));
+    if (imageResp.statusCode != 200) {
+      throw Exception('Failed to fetch image for inference');
     }
+
+    // Send as multipart file upload
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$modelUrl/predict'),
+    );
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      imageResp.bodyBytes,
+      filename: 'image.jpg',
+      contentType: MediaType('image', 'jpeg'),
+    ));
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode != 200) {
+      throw Exception('Model inference failed: ${response.body}');
+    }
+
+    final result = jsonDecode(response.body);
+    classification = UlcerClassX.fromString(result['prediction'] as String);
+    confidence = (result['confidence'] as num).toDouble();
+    notes = _noteFor(classification);
 
     if (!persistData) {
       // Return without saving to Firestore
@@ -195,36 +180,6 @@ class ImageAnalysisService {
         .map((s) => s.docs.map(ImageAnalysis.fromFirestore).toList());
   }
 
-  // ── Simulation (remove once real endpoint is wired) ───────────────
-
-  _SimResult _simulate() {
-    final r = math.Random();
-    // Weighted distribution: None 45%, Infection 25%, Ischaemia 20%, Both 10%
-    final weights = [45, 25, 20, 10];
-    final classes = [
-      UlcerClass.none,
-      UlcerClass.infection,
-      UlcerClass.ischaemia,
-      UlcerClass.both,
-    ];
-
-    var pick = r.nextInt(weights.reduce((a, b) => a + b));
-    UlcerClass cls = UlcerClass.none;
-    for (var i = 0; i < weights.length; i++) {
-      pick -= weights[i];
-      if (pick < 0) {
-        cls = classes[i];
-        break;
-      }
-    }
-
-    return _SimResult(
-      classification: cls,
-      confidence: 0.82 + r.nextDouble() * 0.17,
-      notes: _noteFor(cls),
-    );
-  }
-
   String _noteFor(UlcerClass cls) => switch (cls) {
         UlcerClass.none =>
           'No clinical signs of infection or ischaemia detected. '
@@ -242,15 +197,4 @@ class ImageAnalysisService {
               'High-risk presentation — urgent multidisciplinary evaluation '
               'recommended. Assess for limb-threatening involvement.',
       };
-}
-
-class _SimResult {
-  final UlcerClass classification;
-  final double confidence;
-  final String notes;
-  const _SimResult({
-    required this.classification,
-    required this.confidence,
-    required this.notes,
-  });
 }
