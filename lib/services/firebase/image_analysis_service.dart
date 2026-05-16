@@ -12,7 +12,7 @@ import '../../models/image_analysis.dart';
 /// Handles the full image-analysis pipeline:
 ///   1. Upload photo → Firebase Storage
 ///   2. Save MedicalImages doc → Firestore
-///   3. Run classification
+///   3. Run classification via ML model endpoint
 ///   4. Save ImageAnalysis doc → Firestore
 class ImageAnalysisService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -86,11 +86,7 @@ class ImageAnalysisService {
   Future<ImageAnalysis> analyse(MedicalImages image) async {
     final uid = _uid ?? 'demo-user';
 
-    // ── Classification (simulated or real) ──
-    late UlcerClass classification;
-    late double confidence;
-    late String notes;
-
+    // ── Classification via ML model endpoint ──
     final modelUrl = dotenv.env['MODEL_URL'] ?? '';
     if (modelUrl.isEmpty) throw Exception('MODEL_URL not set in .env');
 
@@ -119,9 +115,9 @@ class ImageAnalysisService {
     }
 
     final result = jsonDecode(response.body);
-    classification = UlcerClassX.fromString(result['prediction'] as String);
-    confidence = (result['confidence'] as num).toDouble();
-    notes = _noteFor(classification);
+    final classification = UlcerClassX.fromString(result['prediction'] as String);
+    final confidence = (result['confidence'] as num).toDouble();
+    final notes = _noteFor(classification);
 
     if (!persistData) {
       // Return without saving to Firestore
