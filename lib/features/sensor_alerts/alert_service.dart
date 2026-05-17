@@ -168,7 +168,9 @@ class AlertService extends ChangeNotifier {
       debugPrint('Error saving alert to Firestore: $e');
     }
 
-    _addAlert(alert);
+    if (!_alerts.any((a) => a.id == alert.id)) {
+      _addAlert(alert);
+    }
     return alert;
   }
 
@@ -212,7 +214,9 @@ class AlertService extends ChangeNotifier {
       debugPrint('Error saving alert to Firestore: $e');
     }
 
-    _addAlert(alert);
+    if (!_alerts.any((a) => a.id == alert.id)) {
+      _addAlert(alert);
+    }
     return alert;
   }
 
